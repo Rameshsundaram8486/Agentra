@@ -1,0 +1,2 @@
+# Network security rules: no inbound to sandbox VMs; no route to Agentra DB or production.
+# Scaffold only: not implemented yet.

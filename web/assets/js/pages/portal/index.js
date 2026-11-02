@@ -1,0 +1,1 @@
+/* Page script: Customer portal home: their projects and pending actions. Scaffold only: not implemented yet. */

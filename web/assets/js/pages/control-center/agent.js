@@ -1,0 +1,1 @@
+/* Page script: Agent detail: mission, tools, permissions, autonomy, runs. Scaffold only: not implemented yet. */
