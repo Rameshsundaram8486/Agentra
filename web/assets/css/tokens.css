@@ -1,1 +1,72 @@
-/* Design tokens: colours (light/dark), spacing, type scale, radii. Scaffold only: not implemented yet. */
+/* Design tokens: colours (light/dark), spacing, type scale, radii. */
+:root {
+  color-scheme: light dark;
+
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --text: #1a1e24;
+  --muted: #5a6472;
+  --border: #d8dde4;
+  --accent: #2153c4;
+  --accent-hover: #1a44a3;
+  --accent-text: #ffffff;
+  --focus: #6c9bff;
+
+  --info: #1d4fae;
+  --info-bg: #e7eefc;
+  --success: #1c6f36;
+  --success-bg: #e4f4e9;
+  --warning: #7d5100;
+  --warning-bg: #fdf1dc;
+  --danger: #a32016;
+  --danger-bg: #fbe8e6;
+  --neutral: #47505c;
+  --neutral-bg: #eceff3;
+
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.625rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius: 8px;
+  --radius-sm: 5px;
+  --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 8%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151a;
+    --surface: #1a1e25;
+    --surface-2: #232832;
+    --text: #e7eaee;
+    --muted: #9aa4b2;
+    --border: #2f3541;
+    --accent: #6d97ff;
+    --accent-hover: #8aacff;
+    --accent-text: #0b1020;
+    --focus: #8aacff;
+
+    --info: #9dbaff;
+    --info-bg: #1d2a47;
+    --success: #7fd69a;
+    --success-bg: #17301f;
+    --warning: #f1c26b;
+    --warning-bg: #3a2c12;
+    --danger: #ff9b90;
+    --danger-bg: #3d1a17;
+    --neutral: #c2c9d3;
+    --neutral-bg: #2a303a;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  }
+}

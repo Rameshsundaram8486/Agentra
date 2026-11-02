@@ -2,7 +2,15 @@
 
 AI-native operating platform for an IT services company. Specialised agents do bounded work, a workflow engine owns state, and humans approve consequential decisions against exact artifact versions.
 
-> **Status: Increment 0 (foundation) done.** Settings, JSON logging with secret masking, PostgreSQL engine, unit of work, Alembic and `/health` work, with tests. Everything else is still scaffold: files carry a one-line purpose header and say "Scaffold only".
+> **Status: Increment 1a (workflow, identity, audit) done.** Working so far:
+> - sign-in with server sessions
+> - projects and role-based memberships
+> - a workflow engine driven by YAML lifecycles, with entry and exit gates, optimistic locking and a record of every transition
+> - an append-only, hash-chained audit trail
+> - a job queue and transactional outbox
+> - the Control Center pages for sign-in, projects, a project's phases and team, and the audit trail
+>
+> Everything else is still scaffold: those files carry a one-line purpose header and say "Scaffold only". See [docs/architecture/overview.md](docs/architecture/overview.md).
 
 ## Getting started
 

@@ -1,18 +1,12 @@
 from alembic import command
 from alembic.autogenerate import compare_metadata
-from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import Engine
+from sqlalchemy import Engine, inspect, text
 
 from app.infrastructure.db import Base
-from app.infrastructure.settings import ROOT_DIR
-
-
-def _alembic_config(database_url: str) -> Config:
-    config = Config(str(ROOT_DIR / "alembic.ini"))
-    config.attributes["database_url"] = database_url
-    return config
+from app.modules.identity.service import SYSTEM_USER_ID
+from tests.support import alembic_config as _alembic_config
 
 
 def _current_revision(engine: Engine) -> str | None:
@@ -33,6 +27,26 @@ def test_migrations_upgrade_and_downgrade_cleanly(test_database_url: str, engine
 
     command.upgrade(config, "head")
     assert _current_revision(engine) == head
+
+
+def test_downgrade_removes_everything_and_upgrade_seeds_system_account(test_database_url: str, engine: Engine) -> None:
+    config = _alembic_config(test_database_url)
+
+    command.downgrade(config, "base")
+    assert set(inspect(engine).get_table_names()) == {"alembic_version"}
+
+    command.upgrade(config, "head")
+    with engine.connect() as connection:
+        system_kind = connection.execute(
+            text("SELECT kind FROM users WHERE id = :id"), {"id": SYSTEM_USER_ID}
+        ).scalar_one()
+        triggers = set(
+            connection.execute(
+                text("SELECT tgname FROM pg_trigger WHERE tgrelid = 'audit_events'::regclass AND NOT tgisinternal")
+            ).scalars()
+        )
+    assert system_kind == "system"
+    assert triggers == {"audit_events_no_update_delete", "audit_events_no_truncate"}
 
 
 def test_models_match_migrations(test_database_url: str, engine: Engine) -> None:

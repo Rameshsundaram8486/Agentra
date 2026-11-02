@@ -1,1 +1,29 @@
-<!-- Control Center - Audit log explorer. Scaffold only: not implemented yet. -->
+<!doctype html>
+<!-- Control Center - Project audit trail and hash-chain verification. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Audit trail - Agentra</title>
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <script type="module" src="../assets/js/pages/control-center/audit.js"></script>
+</head>
+<body>
+  <header class="shell" id="shell"></header>
+  <main class="page">
+    <div class="page-header">
+      <div>
+        <h1>Audit trail</h1>
+        <p class="subtitle"><a id="project-link" href="projects.html">Project</a> - newest first. Entries cannot be edited or deleted.</p>
+      </div>
+      <button id="verify" class="button button-secondary" type="button" hidden>Verify hash chain</button>
+    </div>
+    <div id="verify-result" hidden></div>
+    <section class="card card-flush" id="events"><p class="empty">Loading...</p></section>
+    <div><button id="older" class="button button-secondary" type="button" hidden>Load older entries</button></div>
+  </main>
+</body>
+</html>

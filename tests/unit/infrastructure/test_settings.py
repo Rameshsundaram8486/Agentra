@@ -35,6 +35,13 @@ def test_empty_environment_values_are_treated_as_unset(monkeypatch: pytest.Monke
     assert settings.azure_key_vault_url is None
 
 
+@pytest.mark.parametrize(("env", "minimum"), [("development", 8), ("test", 12), ("production", 12)])
+def test_short_passwords_are_allowed_only_in_development(env: str, minimum: int) -> None:
+    settings = Settings(_env_file=None, database_url="postgresql+psycopg://u:p@h/db", agentra_env=env)
+
+    assert settings.min_password_length == minimum
+
+
 def test_database_url_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
 

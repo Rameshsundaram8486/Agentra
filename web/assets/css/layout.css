@@ -1,1 +1,102 @@
-/* App shell: sidebar, header, content grid, responsive breakpoints. Scaffold only: not implemented yet. */
+/* App shell, page container and section layout. */
+.shell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+}
+
+.nav {
+  display: flex;
+  gap: var(--space-4);
+  flex: 1;
+}
+
+.nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.nav a:hover {
+  color: var(--text);
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+  display: grid;
+  gap: var(--space-5);
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.page-header .subtitle {
+  color: var(--muted);
+  margin-top: var(--space-1);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.center-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+}
+
+@media (max-width: 800px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .shell {
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .page {
+    padding: var(--space-5) var(--space-4);
+  }
+}

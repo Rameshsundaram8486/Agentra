@@ -1,0 +1,18 @@
+# Permissions per role. Project roles apply only within the project the membership is for.
+# Platform permissions (founder / admin, and the system account) apply to every project.
+# Workflow state changes are authorised per transition in config/workflows/lifecycles/, not here.
+version: 1
+
+platform_admin:
+  - project.create
+  - project.view
+  - audit.view
+  - audit.verify
+  - user.manage
+
+roles:
+  owner: [project.view, project.manage_members, audit.view]
+  project_manager: [project.view, audit.view]
+  reviewer: [project.view, audit.view]
+  customer_approver: [project.view]
+  agent: [project.view]

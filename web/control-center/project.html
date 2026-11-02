@@ -1,1 +1,81 @@
-<!-- Control Center - Project workspace: phase tabs, progress, team, timeline. Scaffold only: not implemented yet. -->
+<!doctype html>
+<!-- Control Center - Project workspace: phases, state transitions, members. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project - Agentra</title>
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <script type="module" src="../assets/js/pages/control-center/project.js"></script>
+</head>
+<body>
+  <header class="shell" id="shell"></header>
+  <main class="page">
+    <div class="page-header">
+      <div>
+        <h1 id="project-name">Project</h1>
+        <p class="subtitle" id="project-meta"></p>
+      </div>
+      <a id="audit-link" class="button button-secondary" hidden>Audit trail</a>
+    </div>
+
+    <div class="grid-2">
+      <section class="section">
+        <div class="section-header">
+          <h2>Phases</h2>
+          <span class="muted small">State changes are checked and recorded by the server.</span>
+        </div>
+        <div class="card card-flush" id="phases"><p class="empty">Loading...</p></div>
+      </section>
+
+      <section class="section">
+        <h2>Team</h2>
+        <div class="card">
+          <ul class="list" id="members"></ul>
+          <form id="add-member-form" class="form" hidden>
+            <h3>Add member</h3>
+            <div class="field">
+              <label for="member-email">Email</label>
+              <input id="member-email" name="email" type="email" required>
+            </div>
+            <div class="field">
+              <label for="member-role">Role</label>
+              <select id="member-role" name="role">
+                <option value="project_manager">Project manager</option>
+                <option value="reviewer">Reviewer</option>
+                <option value="customer_approver">Customer approver</option>
+                <option value="owner">Owner</option>
+                <option value="agent">Agent</option>
+              </select>
+            </div>
+            <div id="member-error" class="alert alert-error" role="alert" hidden></div>
+            <button class="button" type="submit">Add</button>
+          </form>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="transition-dialog">
+    <form id="transition-form" class="form" method="dialog">
+      <div>
+        <h2 class="dialog-title" id="transition-title">Change state</h2>
+        <p class="muted small" id="transition-summary"></p>
+      </div>
+      <div class="field">
+        <label for="transition-reason">Reason</label>
+        <textarea id="transition-reason" name="reason" required minlength="3" maxlength="2000"></textarea>
+        <span class="hint">Recorded in the audit trail with your name.</span>
+      </div>
+      <div id="transition-error" class="alert alert-error" role="alert" hidden></div>
+      <div class="actions">
+        <button class="button" type="submit" value="confirm">Confirm</button>
+        <button class="button button-secondary" type="button" id="transition-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

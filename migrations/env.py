@@ -5,11 +5,10 @@ import logging
 from alembic import context
 from sqlalchemy import create_engine, pool
 
+import app.models  # noqa: F401  (registers every table on Base.metadata)
 from app.infrastructure.db import Base
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.settings import get_settings
-
-# Module models are imported here as modules gain tables, so autogenerate sees them.
 
 config = context.config
 target_metadata = Base.metadata

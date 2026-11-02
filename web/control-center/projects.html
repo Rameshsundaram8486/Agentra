@@ -1,1 +1,60 @@
-<!-- Control Center - Project list. Scaffold only: not implemented yet. -->
+<!doctype html>
+<!-- Control Center - Projects list. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Projects - Agentra</title>
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <script type="module" src="../assets/js/pages/control-center/projects.js"></script>
+</head>
+<body>
+  <header class="shell" id="shell"></header>
+  <main class="page">
+    <div class="page-header">
+      <div>
+        <h1>Projects</h1>
+        <p class="subtitle">Delivery projects you are a member of.</p>
+      </div>
+      <button id="new-project-toggle" class="button" type="button" hidden>New project</button>
+    </div>
+
+    <section id="new-project" class="card" hidden>
+      <form id="new-project-form" class="form">
+        <h2>New project</h2>
+        <div class="form-row">
+          <div class="field">
+            <label for="code">Code</label>
+            <input id="code" name="code" required pattern="[A-Z0-9][A-Z0-9\-]{1,31}" placeholder="ACME-INTRANET">
+            <span class="hint">Capitals, digits and hyphens.</span>
+          </div>
+          <div class="field">
+            <label for="name">Name</label>
+            <input id="name" name="name" required maxlength="200">
+          </div>
+          <div class="field">
+            <label for="customer_name">Customer</label>
+            <input id="customer_name" name="customer_name" required maxlength="200">
+          </div>
+        </div>
+        <div class="field">
+          <label for="description">Description</label>
+          <textarea id="description" name="description" maxlength="5000"></textarea>
+        </div>
+        <div id="new-project-error" class="alert alert-error" role="alert" hidden></div>
+        <div class="actions">
+          <button class="button" type="submit">Create project</button>
+          <button id="new-project-cancel" class="button button-secondary" type="button">Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card card-flush" id="project-list" aria-live="polite">
+      <p class="empty">Loading...</p>
+    </section>
+  </main>
+</body>
+</html>

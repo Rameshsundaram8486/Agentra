@@ -1,2 +1,12 @@
 # Phase 11 - Customer UAT and Sign-Off: states, tasks, entry/exit gates, required approvals. Primary agent: uat_release.
-# Scaffold only: not implemented yet.
+# Tasks and required approvals are defined in Increment 8 (Phase 11 slice).
+key: phase_11_customer_uat_and_sign_off
+version: 1
+phase: 11
+name: Customer UAT and Sign-Off
+primary_agent: uat_release
+lifecycle: standard_phase
+task_lifecycle: standard_task
+entry:
+  requires_completed_phases: [10]
+tasks: []

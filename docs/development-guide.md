@@ -25,12 +25,25 @@ powershell -ExecutionPolicy Bypass -File scripts\dev_setup.ps1
 
 `create_db.ps1` asks for the postgres superuser password (or reads `$env:PGPASSWORD`) and never stores it. The `agentra` role gets a random password that is written only to `.env`, which is gitignored. The role is not a superuser and cannot create databases or roles.
 
+## First user
+
+There is no sign-up page. Create the first platform administrator from the command line; it prompts for a password of at least 12 characters:
+
+```powershell
+uv run python -m app.cli create-user --email you@example.com --name "Your Name" --admin
+uv run python -m app.cli create-agent --key business_analyst --name "Business Analyst Agent"   # optional
+uv run python -m app.cli verify-audit
+```
+
+CLI actions are audited as the Agentra system account.
+
 ## Running
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_api.ps1   # http://127.0.0.1:8000, auto-reload
 ```
 
+- `http://127.0.0.1:8000/` opens the Control Center. Sign in, create a project, add members by email, and move phases.
 - `GET /health` returns `200 {"status": "ok", "database": "ok", ...}`, or `503` with `"database": "unavailable"`.
 - API docs at `/docs` (disabled when `AGENTRA_ENV=production`).
 

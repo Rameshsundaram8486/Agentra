@@ -1,0 +1,23 @@
+# Standard task lifecycle. Same states as phases; agents start and submit their own work.
+# Gates checked in code (app/modules/workflow/gates.py):
+#   - to in_progress: the phase is in_progress and every task in depends_on is completed
+key: standard_task
+version: 1
+initial_state: not_started
+states: [not_started, ready, in_progress, waiting_for_input, waiting_for_review, changes_requested, blocked, failed, completed, cancelled]
+terminal_states: [completed, cancelled]
+
+transitions:
+  - {from: not_started, to: ready, roles: [owner, project_manager, system]}
+  - {from: ready, to: in_progress, roles: [agent, project_manager, system]}
+  - {from: in_progress, to: waiting_for_input, roles: [agent, project_manager]}
+  - {from: waiting_for_input, to: in_progress, roles: [owner, project_manager]}
+  - {from: in_progress, to: waiting_for_review, roles: [agent, project_manager]}
+  - {from: waiting_for_review, to: changes_requested, roles: [reviewer, owner]}
+  - {from: waiting_for_review, to: completed, roles: [reviewer, owner]}
+  - {from: changes_requested, to: in_progress, roles: [agent, project_manager]}
+  - {from: [ready, in_progress, waiting_for_input, waiting_for_review, changes_requested], to: blocked, roles: [owner, project_manager, agent, system]}
+  - {from: blocked, to: ready, roles: [owner, project_manager]}
+  - {from: in_progress, to: failed, roles: [system]}
+  - {from: failed, to: ready, roles: [owner, project_manager, system]}
+  - {from: [not_started, ready, in_progress, waiting_for_input, waiting_for_review, changes_requested, blocked, failed], to: cancelled, roles: [owner, project_manager]}

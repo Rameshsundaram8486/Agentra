@@ -1,18 +1,33 @@
-"""Shared pytest fixtures: test PostgreSQL database and settings.
+"""Shared pytest fixtures: test PostgreSQL database, settings, clock, policies and data factories.
 
-The fake model provider and fake sandbox fixtures arrive with the agent runtime (Increment 2).
+The test database is rebuilt from the migrations once per test run. Tests create their own uniquely named
+data, so they never depend on each other. The fake model provider and fake sandbox arrive in Increment 2.
 """
 
-from collections.abc import Iterator
+import uuid
+from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
+from typing import Any
 
 import pytest
+from alembic import command
+from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import Engine
 from sqlalchemy.engine import make_url
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.infrastructure.db import create_db_engine
+import app.models  # noqa: F401  (registers every table)
+from app.composition import Policies, Services, load_policies
+from app.infrastructure.clock import FixedClock
+from app.infrastructure.db import create_db_engine, make_session_factory
 from app.infrastructure.settings import ENV_FILE, Settings
+from app.infrastructure.unit_of_work import UnitOfWork
+from app.main import create_app
+from app.modules.identity.service import SYSTEM_ACTOR, Actor
+from app.modules.projects.service import ProjectCreate, ProjectView
+from tests.support import DEFAULT_PASSWORD, Team, TestUser, alembic_config
 
 
 class _TestEnvironment(BaseSettings):
@@ -34,12 +49,141 @@ def test_database_url() -> str:
 
 
 @pytest.fixture(scope="session")
-def test_settings(test_database_url: str) -> Settings:
+def migrated_database(test_database_url: str) -> None:
+    config = alembic_config(test_database_url)
+    command.downgrade(config, "base")
+    command.upgrade(config, "head")
+
+
+@pytest.fixture(scope="session")
+def test_settings(test_database_url: str, migrated_database: None) -> Settings:
     return Settings(database_url=test_database_url, agentra_env="test")
 
 
 @pytest.fixture(scope="session")
-def engine(test_database_url: str) -> Iterator[Engine]:
+def engine(test_database_url: str, migrated_database: None) -> Iterator[Engine]:
     engine = create_db_engine(test_database_url)
     yield engine
     engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def policies() -> Policies:
+    return load_policies()
+
+
+@pytest.fixture
+def clock() -> FixedClock:
+    return FixedClock(datetime.now(UTC).replace(microsecond=0))
+
+
+@pytest.fixture
+def session_factory(engine: Engine) -> sessionmaker[Session]:
+    return make_session_factory(engine)
+
+
+@pytest.fixture
+def run(
+    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies
+) -> Callable[..., Any]:
+    """Runs fn(services) in one committed unit of work, like a single API request."""
+
+    def _run(fn: Callable[[Services], Any], *, policies: Policies = policies) -> Any:
+        with UnitOfWork(session_factory) as uow:
+            result = fn(Services(uow.session, clock, policies))
+            uow.commit()
+            return result
+
+    return _run
+
+
+@pytest.fixture
+def make_user(run: Callable[..., Any]) -> Callable[..., TestUser]:
+    def _make(kind: str = "human", *, admin: bool = False, name: str | None = None) -> TestUser:
+        suffix = uuid.uuid4().hex[:10]
+        if kind == "agent":
+            email = f"agent_{suffix}@agents.agentra.local"
+            view = run(
+                lambda s: s.identity.create_user(
+                    SYSTEM_ACTOR, email=email, display_name=name or f"Agent {suffix}", kind="agent", agent_key=f"agent_{suffix}"
+                )
+            )
+            password = None
+        else:
+            email = f"user_{suffix}@example.test"
+            view = run(
+                lambda s: s.identity.create_user(
+                    SYSTEM_ACTOR, email=email, display_name=name or f"User {suffix}", password=DEFAULT_PASSWORD, is_platform_admin=admin
+                )
+            )
+            password = DEFAULT_PASSWORD
+        actor = Actor(id=view.id, kind=view.kind, display_name=view.display_name, is_platform_admin=view.is_platform_admin)
+        return TestUser(actor=actor, email=email, password=password)
+
+    return _make
+
+
+@pytest.fixture
+def make_project(run: Callable[..., Any], make_user: Callable[..., TestUser]) -> Callable[..., tuple[ProjectView, TestUser]]:
+    """Creates a project owned by a new (or given) platform admin."""
+
+    def _make(owner: TestUser | None = None, *, policies: Policies | None = None) -> tuple[ProjectView, TestUser]:
+        owner = owner or make_user(admin=True)
+        data = ProjectCreate(code=f"P-{uuid.uuid4().hex[:8].upper()}", name="Synthetic project", customer_name="Example Co")
+        kwargs = {"policies": policies} if policies else {}
+        project = run(lambda s: s.projects.create_project(owner.actor, data), **kwargs)
+        return project, owner
+
+    return _make
+
+
+@pytest.fixture
+def add_member(run: Callable[..., Any]) -> Callable[[TestUser, uuid.UUID, TestUser, str], None]:
+    def _add(owner: TestUser, project_id: uuid.UUID, user: TestUser, role: str) -> None:
+        run(lambda s: s.identity.add_member(owner.actor, project_id, user.email, role))
+
+    return _add
+
+
+@pytest.fixture
+def make_team(
+    make_project: Callable[..., tuple[ProjectView, TestUser]],
+    make_user: Callable[..., TestUser],
+    add_member: Callable[[TestUser, uuid.UUID, TestUser, str], None],
+) -> Callable[..., Team]:
+    """A project with an owner (platform admin), a project manager, a reviewer and an agent."""
+
+    def _make(*, policies: Policies | None = None) -> Team:
+        project, owner = make_project(policies=policies)
+        pm, reviewer, agent = make_user(name="PM"), make_user(name="Reviewer"), make_user("agent")
+        add_member(owner, project.id, pm, "project_manager")
+        add_member(owner, project.id, reviewer, "reviewer")
+        add_member(owner, project.id, agent, "agent")
+        return Team(project, owner, pm, reviewer, agent)
+
+    return _make
+
+
+@pytest.fixture
+def team(make_team: Callable[..., Team]) -> Team:
+    return make_team()
+
+
+@pytest.fixture
+def client_for(test_settings: Settings, clock: FixedClock, policies: Policies) -> Iterator[Callable[..., TestClient]]:
+    """client_for(user) returns an API client signed in as that user; client_for() an anonymous one."""
+    app = create_app(test_settings, clock=clock, policies=policies)
+    clients: list[TestClient] = []
+
+    def _client(user: TestUser | None = None) -> TestClient:
+        client = TestClient(app)
+        client.__enter__()
+        clients.append(client)
+        if user is not None:
+            response = client.post("/api/auth/login", json={"email": user.email, "password": user.password})
+            assert response.status_code == 200, response.text
+        return client
+
+    yield _client
+    for client in clients:
+        client.__exit__(None, None, None)

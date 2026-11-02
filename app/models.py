@@ -1,0 +1,7 @@
+"""Imports every ORM model so Base.metadata is complete (Alembic autogenerate and tests)."""
+
+from app.infrastructure import job_queue, outbox  # noqa: F401
+from app.modules.audit import models as audit_models  # noqa: F401
+from app.modules.identity import models as identity_models  # noqa: F401
+from app.modules.projects import models as projects_models  # noqa: F401
+from app.modules.workflow import models as workflow_models  # noqa: F401

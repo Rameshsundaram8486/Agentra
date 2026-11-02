@@ -1,4 +1,1 @@
-"""Append-only, hash-chained audit events for every consequential action.
-
-Scaffold only: not implemented yet.
-"""
+"""Append-only, hash-chained audit trail of consequential actions."""

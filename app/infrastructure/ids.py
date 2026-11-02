@@ -1,4 +1,7 @@
-"""Stable identifier generation.
+"""Stable identifier generation."""
 
-Scaffold only: not implemented yet.
-"""
+import uuid
+
+
+def new_id() -> uuid.UUID:
+    return uuid.uuid4()

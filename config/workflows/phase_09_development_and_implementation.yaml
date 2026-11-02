@@ -1,2 +1,12 @@
 # Phase 9 - Development and Implementation: states, tasks, entry/exit gates, required approvals. Primary agent: developer.
-# Scaffold only: not implemented yet.
+# Tasks and required approvals are defined in Increment 6 (Phase 9 slice).
+key: phase_09_development_and_implementation
+version: 1
+phase: 9
+name: Development and Implementation
+primary_agent: developer
+lifecycle: standard_phase
+task_lifecycle: standard_task
+entry:
+  requires_completed_phases: [8]
+tasks: []

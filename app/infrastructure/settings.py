@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     azure_key_vault_url: str | None = None
     sandbox_provider: Literal["hyperv", "azure", "fake"] = "hyperv"
     log_level: str = "INFO"
+    session_ttl_hours: int = 12
+
+    @property
+    def min_password_length(self) -> int:
+        """Shorter passwords are allowed only for local demo accounts in development."""
+        return 8 if self.agentra_env == "development" else 12
 
     def secret_values(self) -> list[str]:
         """Raw secret values, so logging can mask them wherever they appear."""
