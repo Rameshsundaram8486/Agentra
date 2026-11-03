@@ -127,3 +127,4 @@ def test_root_redirects_to_the_control_center_and_pages_are_served(client_for: C
     assert root.status_code == 307 and root.headers["location"] == "/app/control-center/projects.html"
     assert login_page.status_code == 200 and "<form" in login_page.text
     assert stylesheet.status_code == 200
+    assert client.get("/favicon.ico").headers["content-type"].startswith("image/svg+xml")

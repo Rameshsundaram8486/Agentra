@@ -7,6 +7,7 @@ from app.modules.errors import (
     AuthenticationError,
     ConflictError,
     DomainError,
+    IntegrityFailureError,
     InvalidTransitionError,
     NotFoundError,
     PermissionDeniedError,
@@ -20,6 +21,7 @@ _RESPONSES: list[tuple[type[DomainError], int, str]] = [
     (InvalidTransitionError, 409, "invalid_transition"),
     (ConflictError, 409, "conflict"),
     (ValidationFailedError, 422, "validation_failed"),
+    (IntegrityFailureError, 500, "integrity_failure"),
 ]
 
 

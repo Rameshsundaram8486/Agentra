@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 12
 
     @property
+    def artifact_root(self) -> Path:
+        """Artifact store folder; a relative path is taken from the repository root."""
+        path = self.artifact_store_path
+        return path if path.is_absolute() else (ROOT_DIR / path).resolve()
+
+    @property
     def min_password_length(self) -> int:
         """Shorter passwords are allowed only for local demo accounts in development."""
         return 8 if self.agentra_env == "development" else 12

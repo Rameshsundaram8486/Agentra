@@ -1,1 +1,75 @@
-<!-- Control Center - Decision detail: recommendation, alternatives, rationale, human input, outcome. Scaffold only: not implemented yet. -->
+<!doctype html>
+<!-- Control Center - Decision detail: recommendation, alternatives, rationale, human input, outcome. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decision - Agentra</title>
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <script type="module" src="../assets/js/pages/control-center/decision.js"></script>
+</head>
+<body>
+  <header class="shell" id="shell"></header>
+  <main class="page">
+    <div class="page-header">
+      <div>
+        <h1 id="decision-title">Decision</h1>
+        <p class="subtitle"><a id="back-link" href="projects.html">Decisions</a> - <span id="raised"></span></p>
+      </div>
+      <div id="status"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="section">
+        <section class="card section">
+          <h2>Question</h2>
+          <p id="question"></p>
+          <p class="muted" id="context"></p>
+        </section>
+        <section class="section" id="recommendation-section"></section>
+        <section class="card section">
+          <h2>Options</h2>
+          <div class="section" id="options"></div>
+        </section>
+        <section class="card section" id="decide" hidden>
+          <h2>Your decision</h2>
+          <form id="decide-form" class="form">
+            <div class="choice-list" id="actions"></div>
+            <div class="field" id="select-field" hidden>
+              <label for="selected-option">Option</label>
+              <select id="selected-option" name="selected_option"></select>
+            </div>
+            <div class="field" id="other-field" hidden>
+              <label for="custom-choice">Your alternative</label>
+              <textarea id="custom-choice" name="custom_choice" maxlength="4000"></textarea>
+            </div>
+            <div class="field">
+              <label for="comment">Comment</label>
+              <textarea id="comment" name="comment" maxlength="4000" placeholder="Required to modify, reject or defer"></textarea>
+            </div>
+            <div id="decide-error" class="alert alert-error" role="alert" hidden></div>
+            <div><button class="button" type="submit">Record decision</button></div>
+          </form>
+        </section>
+      </div>
+      <div class="section">
+        <section class="card section">
+          <h2>Assumptions</h2>
+          <ul class="bullets" id="assumptions"></ul>
+        </section>
+        <section class="card section">
+          <h2>Risks</h2>
+          <ul class="bullets" id="risks"></ul>
+        </section>
+        <section class="card section">
+          <h2>History</h2>
+          <ul class="list" id="outcomes"></ul>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

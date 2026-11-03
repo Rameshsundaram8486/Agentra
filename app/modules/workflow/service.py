@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.infrastructure.clock import Clock
 from app.modules.audit.service import AuditService
+from app.modules.decisions.service import DecisionsService
 from app.modules.errors import ConflictError, InvalidTransitionError, NotFoundError, ValidationFailedError
 from app.modules.identity.service import Actor, IdentityService
 from app.modules.workflow import repository
@@ -39,12 +40,14 @@ class WorkflowService:
         catalog: WorkflowCatalog,
         audit: AuditService,
         identity: IdentityService,
+        decisions: DecisionsService,
     ) -> None:
         self._session = session
         self._clock = clock
         self._catalog = catalog
         self._audit = audit
         self._identity = identity
+        self._decisions = decisions
 
     def open_project(self, actor: Actor, project_id: uuid.UUID) -> None:
         """Creates a phase run (and its tasks) for every defined phase. Called by the projects service."""
@@ -133,6 +136,7 @@ class WorkflowService:
             if to_state == COMPLETED:
                 tasks = repository.tasks_for_phase_run(self._session, run.id)
                 failures += phase_exit_failures({task.key: task.state for task in tasks})
+                failures += self._decisions.approval_gate_failures(run.project_id, definition.exit.required_approvals)
             return failures
 
         self._apply(actor, "phase_run", PhaseRun, run, lifecycle, request, gates)
@@ -241,6 +245,7 @@ class WorkflowService:
             version=run.version,
             updated_at=run.updated_at,
             available_transitions=allowed_targets(self._catalog.lifecycle(definition.lifecycle), run.state, roles),
+            required_approvals=list(definition.exit.required_approvals),
             tasks=[self._task_view(task, task_lifecycle, roles) for task in tasks],
         )
 

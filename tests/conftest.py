@@ -24,7 +24,10 @@ from app.infrastructure.clock import FixedClock
 from app.infrastructure.db import create_db_engine, make_session_factory
 from app.infrastructure.settings import ENV_FILE, Settings
 from app.infrastructure.unit_of_work import UnitOfWork
+from app.infrastructure.storage.local import LocalArtifactStore
 from app.main import create_app
+from app.modules.artifacts.service import ArtifactCreate
+from app.modules.decisions.service import ApprovalCreate
 from app.modules.identity.service import SYSTEM_ACTOR, Actor
 from app.modules.projects.service import ProjectCreate, ProjectView
 from tests.support import DEFAULT_PASSWORD, Team, TestUser, alembic_config
@@ -72,6 +75,11 @@ def policies() -> Policies:
     return load_policies()
 
 
+@pytest.fixture(scope="session")
+def store(tmp_path_factory: pytest.TempPathFactory) -> LocalArtifactStore:
+    return LocalArtifactStore(tmp_path_factory.mktemp("artifact-store"))
+
+
 @pytest.fixture
 def clock() -> FixedClock:
     return FixedClock(datetime.now(UTC).replace(microsecond=0))
@@ -83,14 +91,22 @@ def session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 @pytest.fixture
-def run(
-    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies
-) -> Callable[..., Any]:
+def services_for(clock: FixedClock, policies: Policies, store: LocalArtifactStore) -> Callable[..., Services]:
+    """services_for(session) wires services the same way the API does."""
+
+    def _services(session: Session, *, policies: Policies = policies) -> Services:
+        return Services(session, clock, policies, store)
+
+    return _services
+
+
+@pytest.fixture
+def run(session_factory: sessionmaker[Session], services_for: Callable[..., Services], policies: Policies) -> Callable[..., Any]:
     """Runs fn(services) in one committed unit of work, like a single API request."""
 
     def _run(fn: Callable[[Services], Any], *, policies: Policies = policies) -> Any:
         with UnitOfWork(session_factory) as uow:
-            result = fn(Services(uow.session, clock, policies))
+            result = fn(services_for(uow.session, policies=policies))
             uow.commit()
             return result
 
@@ -170,9 +186,40 @@ def team(make_team: Callable[..., Team]) -> Team:
 
 
 @pytest.fixture
-def client_for(test_settings: Settings, clock: FixedClock, policies: Policies) -> Iterator[Callable[..., TestClient]]:
+def approve_phase_documents(run: Callable[..., Any]) -> Callable[..., list[Any]]:
+    """Creates each artifact a phase needs (authored by the team's agent) and has the reviewer approve it."""
+
+    def _approve(team: Team, phase: int, *, policies: Policies | None = None) -> list[Any]:
+        kwargs = {"policies": policies} if policies else {}
+        definition = run(lambda s: s.policies.catalog.phase(phase), **kwargs)
+        approved = []
+        for artifact_type in definition.exit.required_approvals:
+            artifact = run(
+                lambda s, t=artifact_type: s.artifacts.create_artifact(
+                    team.agent.actor, team.project.id, ArtifactCreate(artifact_type=t, title=f"Phase {phase} {t}", content=f"# {t}\n")
+                ),
+                **kwargs,
+            )
+            version = artifact.current_version
+            approved.append(
+                run(
+                    lambda s, v=version: s.decisions.record_approval(
+                        team.reviewer.actor, v.id, ApprovalCreate(decision="approved", content_sha256=v.content_sha256)
+                    ),
+                    **kwargs,
+                )
+            )
+        return approved
+
+    return _approve
+
+
+@pytest.fixture
+def client_for(
+    test_settings: Settings, clock: FixedClock, policies: Policies, store: LocalArtifactStore
+) -> Iterator[Callable[..., TestClient]]:
     """client_for(user) returns an API client signed in as that user; client_for() an anonymous one."""
-    app = create_app(test_settings, clock=clock, policies=policies)
+    app = create_app(test_settings, clock=clock, policies=policies, store=store)
     clients: list[TestClient] = []
 
     def _client(user: TestUser | None = None) -> TestClient:

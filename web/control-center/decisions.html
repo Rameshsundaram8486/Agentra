@@ -1,1 +1,76 @@
-<!-- Control Center - Decision inbox: recommendations, questions and approvals awaiting humans. Scaffold only: not implemented yet. -->
+<!doctype html>
+<!-- Control Center - Decision inbox: recommendations and questions awaiting people. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decisions - Agentra</title>
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <script type="module" src="../assets/js/pages/control-center/decisions.js"></script>
+</head>
+<body>
+  <header class="shell" id="shell"></header>
+  <main class="page">
+    <div class="page-header">
+      <div>
+        <h1>Decisions</h1>
+        <p class="subtitle"><a id="project-link" href="projects.html">Project</a> - questions and recommendations that need a person.</p>
+      </div>
+      <button id="raise-toggle" class="button" type="button" hidden>Raise a decision</button>
+    </div>
+
+    <section class="card" id="raise" hidden>
+      <form id="raise-form" class="form">
+        <h2>Raise a decision</h2>
+        <div class="field">
+          <label for="d-title">Title</label>
+          <input id="d-title" name="title" required maxlength="200">
+        </div>
+        <div class="field">
+          <label for="d-question">Question</label>
+          <textarea id="d-question" name="question" required maxlength="4000"></textarea>
+        </div>
+        <div class="field">
+          <label for="d-context">Context</label>
+          <textarea id="d-context" name="context" maxlength="10000"></textarea>
+        </div>
+        <div class="field">
+          <label for="d-options">Options</label>
+          <textarea id="d-options" name="options" required placeholder="One per line: Title - description"></textarea>
+          <span class="hint">At least two. The text after " - " is the description.</span>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="d-recommended">Recommendation</label>
+            <select id="d-recommended" name="recommended"><option value="">No recommendation</option></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="d-rationale">Rationale</label>
+          <textarea id="d-rationale" name="rationale" maxlength="10000"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="d-assumptions">Assumptions</label>
+            <textarea id="d-assumptions" name="assumptions" placeholder="One per line"></textarea>
+          </div>
+          <div class="field">
+            <label for="d-risks">Risks</label>
+            <textarea id="d-risks" name="risks" placeholder="One per line"></textarea>
+          </div>
+        </div>
+        <div id="raise-error" class="alert alert-error" role="alert" hidden></div>
+        <div class="actions">
+          <button class="button" type="submit">Raise decision</button>
+          <button id="raise-cancel" class="button button-secondary" type="button">Cancel</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card card-flush" id="decision-list"><p class="empty">Loading...</p></section>
+  </main>
+</body>
+</html>

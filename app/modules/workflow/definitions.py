@@ -89,6 +89,13 @@ class EntryRule(BaseModel):
     requires_completed_phases: tuple[int, ...] = ()
 
 
+class ExitRule(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    # Artifact types (config/policies/approval_matrix.yaml) whose current versions must all be approved.
+    required_approvals: tuple[str, ...] = ()
+
+
 class PhaseDefinition(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -100,6 +107,7 @@ class PhaseDefinition(BaseModel):
     lifecycle: str
     task_lifecycle: str
     entry: EntryRule = EntryRule()
+    exit: ExitRule = ExitRule()
     tasks: tuple[TaskDefinition, ...] = ()
 
     @model_validator(mode="after")

@@ -89,7 +89,9 @@ def test_task_waits_for_its_dependencies(run_tasks: Run, task_team: Team) -> Non
     assert _move_task(run_tasks, task_team.agent, draft, "in_progress").state == "in_progress"
 
 
-def test_phase_cannot_complete_while_tasks_are_open(run_tasks: Run, task_team: Team) -> None:
+def test_phase_cannot_complete_while_tasks_are_open(
+    run_tasks: Run, task_team: Team, task_policies: Policies, approve_phase_documents: Callable[..., Any]
+) -> None:
     phase = _start_phase(run_tasks, task_team)
     _finish_task(run_tasks, task_team, "gather_sources")
     phase = _move_phase(run_tasks, task_team.agent, phase, "waiting_for_review")
@@ -98,6 +100,7 @@ def test_phase_cannot_complete_while_tasks_are_open(run_tasks: Run, task_team: T
         _move_phase(run_tasks, task_team.reviewer, phase, "completed")
 
     _move_task(run_tasks, task_team.pm, _task(run_tasks, task_team, "draft_requirements"), "cancelled")
+    approve_phase_documents(task_team, 7, policies=task_policies)
     assert _move_phase(run_tasks, task_team.reviewer, phase, "completed").state == "completed"
 
 

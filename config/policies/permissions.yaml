@@ -1,6 +1,7 @@
 # Permissions per role. Project roles apply only within the project the membership is for.
 # Platform permissions (founder / admin, and the system account) apply to every project.
-# Workflow state changes are authorised per transition in config/workflows/lifecycles/, not here.
+# Workflow state changes are authorised per transition in config/workflows/lifecycles/, and approvals and
+# decision outcomes by config/policies/approval_matrix.yaml, not here.
 version: 1
 
 platform_admin:
@@ -9,10 +10,13 @@ platform_admin:
   - audit.view
   - audit.verify
   - user.manage
+  - artifact.view
+  - decision.view
 
 roles:
-  owner: [project.view, project.manage_members, audit.view]
-  project_manager: [project.view, audit.view]
-  reviewer: [project.view, audit.view]
-  customer_approver: [project.view]
-  agent: [project.view]
+  owner: [project.view, project.manage_members, audit.view, artifact.view, artifact.author, decision.view, decision.raise]
+  project_manager: [project.view, audit.view, artifact.view, artifact.author, decision.view, decision.raise]
+  reviewer: [project.view, audit.view, artifact.view, decision.view]
+  # Customer visibility is narrowed to customer-facing artifacts when the Customer Portal is built (Phase 11).
+  customer_approver: [project.view, artifact.view]
+  agent: [project.view, artifact.view, artifact.author, decision.view, decision.raise]

@@ -15,6 +15,14 @@ export function h(tag, attrs = {}, ...children) {
   return element;
 }
 
+/**
+ * A form control by name. Use this instead of form.<name>: names such as "name", "title" or "action"
+ * return the form element's own properties rather than the control.
+ */
+export function control(form, name) {
+  return form.elements.namedItem(name);
+}
+
 export function formatDateTime(iso) {
   return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }

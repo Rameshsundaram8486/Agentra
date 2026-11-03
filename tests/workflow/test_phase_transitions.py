@@ -28,11 +28,12 @@ def _move(run: Run, user: TestUser | Actor, phase: PhaseRunView, to_state: str, 
     return run(lambda s: s.workflow.transition_phase_run(actor, phase.id, request))
 
 
-def _complete_phase(run: Run, team: Team, number: int) -> PhaseRunView:
+def _complete_phase(run: Run, team: Team, number: int, approve: Callable[..., Any]) -> PhaseRunView:
     phase = _phase(run, team.owner.actor, team.project.id, number)
     phase = _move(run, team.owner, phase, "ready")
     phase = _move(run, team.pm, phase, "in_progress")
     phase = _move(run, team.agent, phase, "waiting_for_review")
+    approve(team, number)
     return _move(run, team.reviewer, phase, "completed")
 
 
@@ -48,8 +49,10 @@ def test_new_project_opens_every_defined_phase_as_not_started(run: Run, team: Te
     assert [p.primary_agent for p in phases] == ["business_analyst", "solution_architect", "developer", "qa_tester", "uat_release"]
 
 
-def test_phase_7_happy_path_records_actor_and_reason_for_every_step(run: Run, team: Team) -> None:
-    completed = _complete_phase(run, team, 7)
+def test_phase_7_happy_path_records_actor_and_reason_for_every_step(
+    run: Run, team: Team, approve_phase_documents: Callable[..., Any]
+) -> None:
+    completed = _complete_phase(run, team, 7, approve_phase_documents)
 
     history = run(lambda s: s.workflow.history(team.owner.actor, "phase_run", completed.id))
     assert completed.state == "completed" and completed.version == 5
@@ -137,13 +140,15 @@ def test_platform_admin_who_is_not_a_member_can_view_but_not_move(
         _move(run, admin, phase, "ready")
 
 
-def test_entry_gate_requires_the_previous_phase_completed(run: Run, team: Team) -> None:
+def test_entry_gate_requires_the_previous_phase_completed(
+    run: Run, team: Team, approve_phase_documents: Callable[..., Any]
+) -> None:
     phase_8 = _phase(run, team.owner.actor, team.project.id, 8)
 
     with pytest.raises(InvalidTransitionError, match="Phase 7 must be completed first"):
         _move(run, team.owner, phase_8, "ready")
 
-    _complete_phase(run, team, 7)
+    _complete_phase(run, team, 7, approve_phase_documents)
     assert _move(run, team.owner, phase_8, "ready").state == "ready"
 
 
@@ -183,7 +188,7 @@ def test_stale_version_is_a_conflict(run: Run, team: Team) -> None:
 
 
 def test_concurrent_transitions_on_the_same_version_let_exactly_one_win(
-    session_factory: Any, clock: Any, policies: Any, run: Run, team: Team, engine: Engine
+    session_factory: Any, services_for: Callable[..., Services], run: Run, team: Team, engine: Engine
 ) -> None:
     phase = _phase(run, team.owner.actor, team.project.id, 7)
     barrier = threading.Barrier(2)
@@ -193,7 +198,7 @@ def test_concurrent_transitions_on_the_same_version_let_exactly_one_win(
         barrier.wait()
         try:
             with UnitOfWork(session_factory) as uow:
-                Services(uow.session, clock, policies).workflow.transition_phase_run(
+                services_for(uow.session).workflow.transition_phase_run(
                     team.owner.actor, phase.id, TransitionRequest(to_state=target, reason="race", expected_version=1)
                 )
                 uow.commit()
@@ -215,11 +220,11 @@ def test_concurrent_transitions_on_the_same_version_let_exactly_one_win(
 
 
 def test_database_guard_catches_a_change_committed_after_the_record_was_read(
-    session_factory: Any, clock: Any, policies: Any, run: Run, team: Team
+    session_factory: Any, services_for: Callable[..., Services], run: Run, team: Team
 ) -> None:
     phase = _phase(run, team.owner.actor, team.project.id, 7)
     with UnitOfWork(session_factory) as slow:
-        slow_services = Services(slow.session, clock, policies)
+        slow_services = services_for(slow.session)
         stale_copy = slow.session.get(PhaseRun, phase.id)  # this session now holds version 1
         assert stale_copy is not None and stale_copy.version == 1
 

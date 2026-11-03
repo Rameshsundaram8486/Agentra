@@ -1,2 +1,40 @@
 # Which decisions need which human role; mandatory approval gates.
-# Scaffold only: not implemented yet.
+#
+# artifact_types: every artifact has one of these types. approver_roles lists the project roles that may
+#   approve, reject or request changes on a version. independent_review: true means nobody who authored
+#   any version of the artifact may approve it (see separation_of_duties.yaml).
+# Which approvals a phase needs before it can complete is set in each phase file (exit.required_approvals).
+# decisions: who may record the outcome of a decision request raised by an agent or a person.
+#
+# Agents never approve or decide. That is enforced in code; a role list containing "agent" fails startup.
+# Phase-specific types are refined as each phase increment is built.
+version: 1
+
+artifact_types:
+  requirements_baseline:
+    title: Requirements baseline
+    approver_roles: [reviewer, owner]
+    independent_review: true
+  design_baseline:
+    title: Design baseline
+    approver_roles: [reviewer, owner]
+    independent_review: true
+  implementation_report:
+    title: Implementation report
+    approver_roles: [reviewer, owner]
+    independent_review: true
+  qa_completion_report:
+    title: QA completion report
+    approver_roles: [reviewer, owner]
+    independent_review: true
+  uat_signoff_record:
+    title: UAT sign-off record
+    approver_roles: [customer_approver]
+    independent_review: true
+  working_document:
+    title: Working document
+    approver_roles: [reviewer, owner, project_manager]
+    independent_review: true
+
+decisions:
+  decider_roles: [owner, project_manager]

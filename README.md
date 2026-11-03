@@ -2,13 +2,17 @@
 
 AI-native operating platform for an IT services company. Specialised agents do bounded work, a workflow engine owns state, and humans approve consequential decisions against exact artifact versions.
 
-> **Status: Increment 1a (workflow, identity, audit) done.** Working so far:
+> **Status: Increment 1b (artifacts, decisions, approvals) done.** Working so far:
 > - sign-in with server sessions
 > - projects and role-based memberships
 > - a workflow engine driven by YAML lifecycles, with entry and exit gates, optimistic locking and a record of every transition
 > - an append-only, hash-chained audit trail
 > - a job queue and transactional outbox
-> - the Control Center pages for sign-in, projects, a project's phases and team, and the audit trail
+> - versioned documents stored by content hash, with diffs
+> - approvals bound to the exact version and hash, with no self-approval and never by agents
+> - decision records that keep the original recommendation
+> - phase completion gated on approvals
+> - the Control Center pages for projects, documents, decisions and the audit trail
 >
 > Everything else is still scaffold: those files carry a one-line purpose header and say "Scaffold only". See [docs/architecture/overview.md](docs/architecture/overview.md).
 

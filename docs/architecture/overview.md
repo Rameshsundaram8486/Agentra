@@ -22,8 +22,18 @@ Browser (web/control-center, plain HTML/JS)
 |---|---|---|
 | `audit` | `audit_events` | nothing |
 | `identity` | users, sessions, memberships; permission checks (`config/policies/permissions.yaml`) | audit |
-| `workflow` | phase runs, tasks, state transitions; lifecycles from `config/workflows/` | audit, identity |
+| `artifacts` | artifacts, versions; content in the content-addressed store (`app/infrastructure/storage`) | audit, identity |
+| `decisions` | approvals, decision requests and outcomes; rules from `config/policies/approval_matrix.yaml` | audit, identity, artifacts |
+| `workflow` | phase runs, tasks, state transitions; lifecycles from `config/workflows/` | audit, identity, decisions (approval gate) |
 | `projects` | projects | audit, identity, workflow |
+
+## Approvals and decisions
+
+- **Only people approve or decide.** Agent and system accounts are refused in code, and a policy file that lists `agent` as an approver or decider fails startup.
+- **An approval is tied to one exact version.** It names the version id and the SHA-256 of the content the reviewer saw. Both must match, the version must still be current, and the stored bytes are re-hashed before the approval is recorded.
+- **Authors can't approve their own work.** With `independent_review: true`, nobody who authored any version of an artifact can approve it.
+- **Phase completion needs approvals.** Each phase file lists `exit.required_approvals`. Completing the phase needs every artifact of those types approved at its current version. Adding a new version voids the earlier approval.
+- **Recommendations are preserved.** A decision request stores the recommendation exactly as raised. Each human response (accept, choose another option, something else, modify, reject, defer) is a separate numbered outcome.
 
 ## Authorisation
 

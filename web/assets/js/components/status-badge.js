@@ -13,6 +13,14 @@ const TONE = {
   failed: "danger",
   completed: "success",
   cancelled: "muted",
+  // approvals
+  approved: "success",
+  rejected: "danger",
+  pending: "neutral",
+  // decisions
+  open: "info",
+  deferred: "warning",
+  decided: "success",
 };
 
 export function statusBadge(state) {

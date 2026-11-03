@@ -1,2 +1,11 @@
 # Author/reviewer separation rules; no self-approval.
-# Scaffold only: not implemented yet.
+#
+# These rules are enforced in app/modules/decisions/authority.py:
+#   1. Only people approve or decide. Agent and system accounts never can, and this is not configurable.
+#   2. Where an artifact type has independent_review: true (approval_matrix.yaml), anyone who authored
+#      any version of that artifact cannot approve, reject or request changes on it.
+#   3. An approval is valid only for the exact version id and content sha256 it was given for. A newer
+#      version needs a new approval.
+#
+# The per-type switch lives in approval_matrix.yaml so that each artifact type is configured in one place.
+version: 1

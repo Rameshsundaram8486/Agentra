@@ -27,7 +27,7 @@ def get_uow(request: Request) -> Iterator[UnitOfWork]:
 
 
 def get_services(request: Request, uow: Annotated[UnitOfWork, Depends(get_uow)]) -> Services:
-    return Services(uow.session, request.app.state.clock, request.app.state.policies)
+    return Services(uow.session, request.app.state.clock, request.app.state.policies, request.app.state.store)
 
 
 def get_session_token(request: Request) -> str:

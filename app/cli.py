@@ -17,6 +17,7 @@ from app.infrastructure.clock import SystemClock
 from app.infrastructure.db import create_db_engine, make_session_factory
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.settings import Settings, get_settings
+from app.infrastructure.storage.local import LocalArtifactStore
 from app.infrastructure.unit_of_work import UnitOfWork
 from app.modules.errors import DomainError, ValidationFailedError
 from app.modules.identity.service import SYSTEM_ACTOR
@@ -59,7 +60,10 @@ def main(
     try:
         with UnitOfWork(make_session_factory(engine)) as uow:
             services = Services(
-                uow.session, SystemClock(), load_policies(min_password_length=settings.min_password_length)
+                uow.session,
+                SystemClock(),
+                load_policies(min_password_length=settings.min_password_length),
+                LocalArtifactStore(settings.artifact_root),
             )
             if args.command == "create-user":
                 user = services.identity.create_user(

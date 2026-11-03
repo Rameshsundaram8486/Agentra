@@ -55,6 +55,7 @@ uv run pytest tests\unit # unit tests only, no database needed
 ```
 
 - Integration tests use `TEST_DATABASE_URL` from `.env`, and refuse to run unless the database name ends in `_test`.
+- Browser walkthrough of the Control Center (headless Edge or Chrome, test database, port 8010): `powershell -ExecutionPolicy Bypass -File scripts\run_ui_walkthrough.ps1`. Screenshots go to `var\ui-walkthrough\screens`.
 - Tests run against real PostgreSQL, not SQLite or mocks (ADR 0002).
 
 ## Database migrations

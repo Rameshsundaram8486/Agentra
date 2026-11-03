@@ -1,4 +1,1 @@
-"""Human-in-the-loop: recommendations, options, questions, suggestions, decisions and approvals.
-
-Scaffold only: not implemented yet.
-"""
+"""Human-in-the-loop: recommendations, options, questions, decisions and version-bound approvals."""

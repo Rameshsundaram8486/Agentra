@@ -5,17 +5,19 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api.errors import register_error_handlers
-from app.api.routers import audit, auth, health, projects, workflow
+from app.api.routers import artifacts, audit, auth, decisions, health, projects, workflow
 from app.composition import Policies, load_policies
 from app.infrastructure.clock import Clock, SystemClock
 from app.infrastructure.db import create_db_engine, make_session_factory
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.settings import ROOT_DIR, Settings, get_settings
+from app.infrastructure.storage.base import ArtifactStore
+from app.infrastructure.storage.local import LocalArtifactStore
 
 # Pages are plain files with no inline script or style, so the policy can be strict.
 _PAGE_CSP = (
@@ -37,7 +39,11 @@ async def _security_headers(request: Request, call_next: Callable[[Request], Awa
 
 
 def create_app(
-    settings: Settings | None = None, *, clock: Clock | None = None, policies: Policies | None = None
+    settings: Settings | None = None,
+    *,
+    clock: Clock | None = None,
+    policies: Policies | None = None,
+    store: ArtifactStore | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level, settings.secret_values())
@@ -63,10 +69,19 @@ def create_app(
     app.state.session_factory = make_session_factory(engine)
     app.state.clock = clock or SystemClock()
     app.state.policies = policies
+    app.state.store = store or LocalArtifactStore(settings.artifact_root)
 
     register_error_handlers(app)
     app.middleware("http")(_security_headers)
-    for router in (health.router, auth.router, projects.router, workflow.router, audit.router):
+    for router in (
+        health.router,
+        auth.router,
+        projects.router,
+        workflow.router,
+        artifacts.router,
+        decisions.router,
+        audit.router,
+    ):
         app.include_router(router)
 
     app.mount("/app", StaticFiles(directory=ROOT_DIR / "web"), name="web")
@@ -74,5 +89,9 @@ def create_app(
     @app.get("/", include_in_schema=False)
     def home() -> RedirectResponse:
         return RedirectResponse("/app/control-center/projects.html")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon() -> FileResponse:
+        return FileResponse(ROOT_DIR / "web" / "assets" / "img" / "favicon.svg", media_type="image/svg+xml")
 
     return app

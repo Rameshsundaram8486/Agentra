@@ -15,8 +15,19 @@ def _actor(admin: bool = False) -> Actor:
 
 
 def test_permissions_come_only_from_project_roles_for_ordinary_users() -> None:
-    assert POLICY.permissions_for(_actor(), ["reviewer"]) == {"project.view", "audit.view"}
+    assert POLICY.permissions_for(_actor(), ["reviewer"]) == {"project.view", "audit.view", "artifact.view", "decision.view"}
     assert POLICY.permissions_for(_actor(), []) == frozenset()
+
+
+def test_reviewers_and_customers_cannot_author_or_raise_decisions() -> None:
+    for role in ("reviewer", "customer_approver"):
+        granted = POLICY.permissions_for(_actor(), [role])
+        assert "artifact.author" not in granted
+        assert "decision.raise" not in granted
+
+
+def test_agents_author_and_raise_decisions() -> None:
+    assert {"artifact.author", "decision.raise"} <= POLICY.permissions_for(_actor(), ["agent"])
 
 
 def test_roles_combine() -> None:

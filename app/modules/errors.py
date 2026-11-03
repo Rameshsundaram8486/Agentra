@@ -27,3 +27,7 @@ class ConflictError(DomainError):
 
 class ValidationFailedError(DomainError):
     """Input is well-formed but breaks a business rule."""
+
+
+class IntegrityFailureError(DomainError):
+    """Stored evidence no longer matches its recorded hash. Never retried; needs investigation."""

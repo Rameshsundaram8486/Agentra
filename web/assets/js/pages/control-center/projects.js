@@ -1,7 +1,7 @@
 /* Page script: Projects list and (for platform admins) project creation. */
 
 import { api } from "../../core/api.js";
-import { formatDateTime, h } from "../../core/format.js";
+import { control, formatDateTime, h } from "../../core/format.js";
 import { startPage } from "../../core/shell.js";
 
 function renderList(projects) {
@@ -47,7 +47,7 @@ function enableCreation() {
         method: "POST",
         body: {
           code: form.code.value.trim(),
-          name: form.name.value.trim(),
+          name: control(form, "name").value.trim(),
           customer_name: form.customer_name.value.trim(),
           description: form.description.value.trim() || null,
         },

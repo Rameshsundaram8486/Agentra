@@ -1,1 +1,95 @@
-<!-- Control Center - Artifact viewer: versions, diff, comments, approval status. Scaffold only: not implemented yet. -->
+<!doctype html>
+<!-- Control Center - Artifact viewer: versions, diff, approval status and version-bound review. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Document - Agentra</title>
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <script type="module" src="../assets/js/pages/control-center/artifact.js"></script>
+</head>
+<body>
+  <header class="shell" id="shell"></header>
+  <main class="page">
+    <div class="page-header">
+      <div>
+        <h1 id="artifact-title">Document</h1>
+        <p class="subtitle"><a id="project-link" href="projects.html">Project</a> - <span id="artifact-type"></span></p>
+      </div>
+      <div id="approval-status"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="section">
+        <section class="card section">
+          <div class="section-header">
+            <h2 id="viewing-label">Version</h2>
+            <span class="muted small" id="viewing-note"></span>
+          </div>
+          <dl class="kv" id="version-meta"></dl>
+          <pre class="content-view" id="content"></pre>
+        </section>
+
+        <section class="card section" id="review-panel">
+          <h2>Review this version</h2>
+          <p class="muted small">Your decision is bound to the exact version and content hash shown above. Only a person with an approver role who did not author this document can record it.</p>
+          <div class="field">
+            <label for="review-comment">Comment</label>
+            <textarea id="review-comment" maxlength="4000" placeholder="Required when requesting changes or rejecting"></textarea>
+          </div>
+          <div id="review-message" role="status" hidden></div>
+          <div class="actions">
+            <button class="button" type="button" data-decision="approved">Approve</button>
+            <button class="button button-secondary" type="button" data-decision="changes_requested">Request changes</button>
+            <button class="button button-danger" type="button" data-decision="rejected">Reject</button>
+          </div>
+        </section>
+
+        <section class="card section" id="compare-panel">
+          <h2>Compare versions</h2>
+          <div class="form-row">
+            <div class="field"><label for="compare-from">From</label><select id="compare-from"></select></div>
+            <div class="field"><label for="compare-to">To</label><select id="compare-to"></select></div>
+          </div>
+          <div><button id="compare" class="button button-secondary" type="button">Show changes</button></div>
+          <pre class="content-view" id="diff" hidden></pre>
+        </section>
+
+        <section class="card section" id="new-version" hidden>
+          <h2>Add a new version</h2>
+          <form id="new-version-form" class="form">
+            <div class="field">
+              <label for="nv-content">Content</label>
+              <textarea id="nv-content" name="content" rows="12" required></textarea>
+            </div>
+            <div class="field">
+              <label for="nv-summary">What changed</label>
+              <input id="nv-summary" name="change_summary" required minlength="3" maxlength="2000">
+            </div>
+            <div class="field">
+              <label for="nv-sources">Sources</label>
+              <input id="nv-sources" name="sources" placeholder="Comma-separated">
+            </div>
+            <div id="new-version-error" class="alert alert-error" role="alert" hidden></div>
+            <div><button class="button" type="submit">Save new version</button></div>
+          </form>
+        </section>
+      </div>
+
+      <div class="section">
+        <section class="card section">
+          <h2>Versions</h2>
+          <ul class="list version-list" id="versions"></ul>
+        </section>
+        <section class="card section">
+          <h2>Review history</h2>
+          <ul class="list" id="history"></ul>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

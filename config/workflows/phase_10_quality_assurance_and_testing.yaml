@@ -1,5 +1,5 @@
 # Phase 10 - Quality Assurance and Testing: states, tasks, entry/exit gates, required approvals. Primary agent: qa_tester.
-# Tasks and required approvals are defined in Increment 7 (Phase 10 slice).
+# Tasks are defined in Increment 7 (Phase 10 slice).
 key: phase_10_quality_assurance_and_testing
 version: 1
 phase: 10
@@ -9,4 +9,6 @@ lifecycle: standard_phase
 task_lifecycle: standard_task
 entry:
   requires_completed_phases: [9]
+exit:
+  required_approvals: [qa_completion_report]
 tasks: []

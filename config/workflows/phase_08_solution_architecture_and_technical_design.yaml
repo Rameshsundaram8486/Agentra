@@ -1,5 +1,5 @@
 # Phase 8 - Solution Architecture and Technical Design: states, tasks, entry/exit gates, required approvals. Primary agent: solution_architect.
-# Tasks and required approvals are defined in Increment 4 (Phase 8 slice).
+# Tasks are defined in Increment 4 (Phase 8 slice).
 key: phase_08_solution_architecture_and_technical_design
 version: 1
 phase: 8
@@ -9,4 +9,6 @@ lifecycle: standard_phase
 task_lifecycle: standard_task
 entry:
   requires_completed_phases: [7]
+exit:
+  required_approvals: [design_baseline]
 tasks: []

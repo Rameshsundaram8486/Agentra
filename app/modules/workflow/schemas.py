@@ -37,6 +37,7 @@ class PhaseRunView(BaseModel):
     version: int
     updated_at: datetime
     available_transitions: list[str]
+    required_approvals: list[str]
     tasks: list[TaskView]
 
 

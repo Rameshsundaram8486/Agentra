@@ -271,6 +271,112 @@ dialog .dialog-title {
   margin-bottom: var(--space-2);
 }
 
+/* Document content and diffs */
+.content-view {
+  margin: 0;
+  padding: var(--space-4);
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diff-line {
+  display: block;
+}
+
+.diff-add { background: var(--success-bg); color: var(--success); }
+.diff-del { background: var(--danger-bg); color: var(--danger); }
+.diff-meta { color: var(--muted); }
+
+.hash {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--muted);
+}
+
+.kv dd {
+  margin: 0;
+}
+
+.version-list button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.version-list button:hover,
+.version-list button[aria-current="true"] {
+  background: var(--surface-2);
+}
+
+/* Decisions */
+.recommendation {
+  border-left: 4px solid var(--accent);
+  background: var(--info-bg);
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.option {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.option.is-recommended {
+  border-color: var(--accent);
+}
+
+.choice-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.choice-list label {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-weight: 500;
+}
+
+.choice-list input[type="radio"] {
+  width: auto;
+  min-height: 0;
+}
+
+.bullets {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
 /* Login */
 .login-card {
   width: min(380px, 100%);

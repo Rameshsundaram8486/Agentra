@@ -1,6 +1,6 @@
 # Data model
 
-PostgreSQL tables as of migration `0002`. Each table belongs to one module. Other modules use that module's `service.py` and never query its tables. Foreign keys across modules exist only for referential integrity.
+PostgreSQL tables as of migration `0003`. Each table belongs to one module. Other modules use that module's `service.py` and never query its tables. Foreign keys across modules exist only for referential integrity.
 
 ```mermaid
 erDiagram
@@ -13,6 +13,12 @@ erDiagram
   users ||--o{ state_transitions : "acted"
   projects ||--o{ audit_events : "scopes"
   users ||--o{ audit_events : "acted"
+  projects ||--o{ artifacts : "has"
+  artifacts ||--|{ artifact_versions : "versions"
+  artifact_versions ||--o{ approvals : "reviewed by"
+  projects ||--o{ decision_requests : "raises"
+  decision_requests ||--o{ decision_outcomes : "answered by"
+  artifact_versions |o--o{ decision_requests : "may concern"
 ```
 
 | Table | Module | Purpose | Key rules |
@@ -25,6 +31,11 @@ erDiagram
 | `tasks` | workflow | Work items inside a phase run | Copied from the phase definition when the project opens (`position`, `depends_on`), so later config edits do not rewrite history. |
 | `state_transitions` | workflow | Every phase or task state change | Actor, reason, from and to state, timestamp. Written in the same transaction as the change. |
 | `audit_events` | audit | Append-only, hash-chained trail | `hash = sha256(prev_hash + event fields)`. A database trigger refuses UPDATE, DELETE and TRUNCATE. Writers take an advisory lock so the chain never forks. |
+| `artifacts` | artifacts | A document of a type from `approval_matrix.yaml` | `(project, type, title)` is unique. `current_version_no` moves only by compare-and-set. |
+| `artifact_versions` | artifacts | One immutable version | Content lives in the content-addressed store under its SHA-256 and is re-hashed on every read. **Append-only** (trigger). |
+| `approvals` | decisions | Approve, reject or request changes | Bound to `artifact_version_id` plus `content_sha256`, and only for the current version. Only people with a role listed for the type, and (for independent review) never an author of any version. **Append-only**; the latest by `seq` counts. |
+| `decision_requests` | decisions | A question, its options and the recommendation | Never edited after it is raised, so the AI's recommendation is always preserved. **Append-only**. |
+| `decision_outcomes` | decisions | Each human response: accept, select an option, other, modify, reject or defer | Numbered per request, with a unique `(request, outcome_no)` so concurrent answers cannot both win. A final outcome closes the request. **Append-only**. |
 | `jobs` | infrastructure | Background job queue | One job per `idempotency_key`. Claimed with `FOR UPDATE SKIP LOCKED` under a lease; reclaimed when the lease expires; `dead` after `max_attempts`. |
 | `outbox_messages` | infrastructure | External side effects | Written in the same transaction as the change that causes them. Delivered at least once, and handlers receive the idempotency key. |
 
@@ -35,11 +46,11 @@ erDiagram
 1. **Access:** the actor must be able to see the project. Otherwise the answer is 404, so the project's existence is not revealed.
 2. **Freshness:** `expected_version` must equal the current version, otherwise 409.
 3. **Lifecycle and role:** the transition must exist in the lifecycle YAML, and the actor must hold one of its roles.
-4. **Gates:** entry (earlier phases completed), exit (all tasks closed), task start (phase in progress, dependencies completed).
+4. **Gates:** entry (earlier phases completed), exit (all tasks closed, and every artifact of each type in `exit.required_approvals` approved at its current version with intact content), task start (phase in progress, dependencies completed).
 5. **Update:** compare-and-set `UPDATE ... WHERE version = expected`. If no row matches, the answer is 409, which catches races that step 2 cannot.
 6. **Record:** a `state_transitions` row and an `audit_events` row (before and after state and version, reason, actor).
 
 ## Planned additions
 
-- Increment 1b: artifacts and versions, reviews, approvals bound to version id plus content hash, decision records.
 - Increment 2: agent runs and incidents.
+- Increment 3: requirement items, traceability, change requests against an approved baseline.
