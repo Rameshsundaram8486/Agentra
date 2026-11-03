@@ -34,6 +34,10 @@ class ProfileOverride(_Strict):
     refusal_fallback: bool | None = None
 
 
+class AgentOverride(ProfileOverride):
+    tasks: dict[str, ProfileOverride] = Field(default_factory=dict)
+
+
 class Pricing(_Strict):
     """US dollars per million tokens."""
 
@@ -51,7 +55,7 @@ class ModelConfig(_Strict):
     version: int
     provider: Literal["anthropic"]
     defaults: ModelProfile
-    agents: dict[str, ProfileOverride] = Field(default_factory=dict)
+    agents: dict[str, AgentOverride] = Field(default_factory=dict)
     budget: Budget
     pricing_usd_per_mtok: dict[str, Pricing]
 
@@ -59,17 +63,23 @@ class ModelConfig(_Strict):
     def _consistent(self) -> "ModelConfig":
         if not self.pricing_usd_per_mtok:
             raise ValueError("pricing_usd_per_mtok must list at least one model")
-        models = {self.defaults.model} | {self.profile(key).model for key in self.agents}  # validates overrides
+        profiles = [self.profile(key, task) for key, agent in self.agents.items() for task in [None, *agent.tasks]]
+        models = {self.defaults.model} | {profile.model for profile in profiles}  # building them validates overrides
         unpriced = models - set(self.pricing_usd_per_mtok)
         if unpriced:
             raise ValueError(f"models without pricing: {sorted(unpriced)}")
         return self
 
-    def profile(self, agent_key: str) -> ModelProfile:
-        override = self.agents.get(agent_key)
-        if override is None:
+    def profile(self, agent_key: str, task_key: str | None = None) -> ModelProfile:
+        """Defaults, then the agent's overrides, then the task's."""
+        agent = self.agents.get(agent_key)
+        if agent is None:
             return self.defaults
-        return ModelProfile.model_validate({**self.defaults.model_dump(), **override.model_dump(exclude_none=True)})
+        merged = {**self.defaults.model_dump(), **agent.model_dump(exclude_none=True, exclude={"tasks"})}
+        task = agent.tasks.get(task_key) if task_key else None
+        if task is not None:
+            merged.update(task.model_dump(exclude_none=True))
+        return ModelProfile.model_validate(merged)
 
     def pricing(self, model: str) -> tuple[Pricing, bool]:
         """Price for a model, and whether it is exact. Unknown models get the highest listed rates."""

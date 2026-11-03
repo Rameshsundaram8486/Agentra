@@ -63,6 +63,9 @@ class AgentRunView(BaseModel):
     input_artifact_version_id: uuid.UUID
     input_title: str
     input_version_no: int
+    context_documents: int = Field(description="Other documents the run read")
+    context_decisions: int = Field(description="Decisions the run read")
+    task_id: uuid.UUID | None
     requested_by: uuid.UUID
     requested_by_name: str | None
     attempts: int
@@ -99,5 +102,7 @@ class StartedRun:
     task_key: str
     agent: Actor
     input_artifact_version_id: uuid.UUID
+    input_refs: dict[str, Any]
+    task_id: uuid.UUID | None
     attempt: int
     max_attempts: int

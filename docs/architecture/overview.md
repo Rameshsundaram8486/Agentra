@@ -26,7 +26,8 @@ Browser (web/control-center, plain HTML/JS)
 | `decisions` | approvals, decision requests and outcomes; rules from `config/policies/approval_matrix.yaml` | audit, identity, artifacts |
 | `workflow` | phase runs, tasks, state transitions; lifecycles from `config/workflows/` | audit, identity, decisions (approval gate) |
 | `projects` | projects | audit, identity, workflow |
-| `executions` | agent runs, model calls (the spend ledger) | audit, identity, artifacts, workflow |
+| `executions` | agent runs (linked to workflow tasks, with their inputs), model calls (the spend ledger) | audit, identity, artifacts, workflow, decisions |
+| `requirements` | requirement items, versions and the item ID registry; quality checks; BRD rendering | audit, identity, artifacts, decisions, projects |
 
 ## Approvals and decisions
 
@@ -59,12 +60,28 @@ Worker (app/workers/workflow_worker.py) claims the job
 - **Retries:** only transient provider errors are retried, by the job queue up to the task's `max_attempts`. Refusals, guardrail failures and the budget are final. Asking again after a failed run starts a new run.
 - **Model routing and spend:** `config/models.yaml` (model, effort, token limit and timeout per agent, prices, monthly cap). Agent definitions, prompts and output schemas: `config/agents/<key>/`. A prompt's version is its file name plus a content hash, recorded on every call.
 
+## Phase 7 flow
+
+| Step | Who | Workflow task |
+|---|---|---|
+| Add the brief (typed or uploaded) and any source documents | Project manager | |
+| Ask the agent about the brief | Owner or project manager; the agent runs | Clarify: in progress, then waiting for input |
+| Answer the questions in the decision inbox; close the Clarify task | People | Clarify: completed |
+| Ask the agent to draft the requirements | Owner or project manager; the agent runs | Draft: in progress, then waiting for input (open questions) or waiting for review |
+| Answer its open questions and ask again; the IDs of kept items stay the same | People, then the agent | Draft: back to in progress |
+| Approve the requirements baseline version, then complete the task | Reviewer or owner (never its author) | Draft: completed, only once the current version is approved |
+
+- **Inputs are fixed when a run is asked for:** the chosen brief version, the current source documents and the state of the decisions it reads. The same inputs never produce a second run; a changed answer or document does.
+- **Statuses are derived in code:** confirmed only for a fact backed by a quoted document or an answered decision; assumptions and suggestions are proposed; questions are open. The model never sets a status or an ID.
+- **An approved baseline is not redrafted.** Changing it will need a change request (Increment 3b).
+- Uploaded files are parsed on the host with size, page and decompression limits; the extracted text is what agents read and quote, and the original file is kept by its hash.
+
 ## Authorisation
 
 - Permissions come from project roles (membership) plus platform-admin rights, as defined in `permissions.yaml`.
 - Workflow transitions are authorised separately: each transition in a lifecycle YAML lists the roles that may request it.
 - Someone who cannot see a project gets 404, never 403, so they cannot learn that it exists.
-- Agents are service accounts. They hold the `agent` role, cannot sign in, and are never allowed to complete a review.
+- Agents are service accounts. They hold the `agent` role, cannot sign in, and are never allowed to complete a review. An agent may move only workflow tasks assigned to it.
 
 ## Configuration as data
 

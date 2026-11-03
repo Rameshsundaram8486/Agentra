@@ -4,7 +4,6 @@ from typing import Any
 import pytest
 
 from app.agents import task_implementation
-from app.agents.business_analyst.agent import ClarifyBriefOutput
 from app.composition import CONFIG_DIR, load_policies
 from app.harness.registry import AgentDefinitionError, load_registry
 
@@ -13,6 +12,7 @@ REGISTRY = load_registry(CONFIG_DIR / "agents")
 
 def test_only_defined_agents_are_loaded_and_scaffolds_are_skipped() -> None:
     assert set(REGISTRY.agents) == {"business_analyst"}
+    assert set(REGISTRY.tasks) == {("business_analyst", "clarify_brief"), ("business_analyst", "draft_requirements")}
     task = REGISTRY.task("business_analyst", "clarify_brief")
     assert task is not None
     assert task.spec.input_artifact_types == ("project_brief",)
@@ -50,9 +50,10 @@ def _shape(schema: dict[str, Any], root: dict[str, Any]) -> Any:
     return schema.get("type")
 
 
-def test_schema_sent_to_the_model_matches_the_schema_enforced_in_code() -> None:
-    sent = REGISTRY.task("business_analyst", "clarify_brief").schema_file.schema  # type: ignore[union-attr]
-    enforced = ClarifyBriefOutput.model_json_schema()
+@pytest.mark.parametrize("key", sorted(REGISTRY.tasks), ids=lambda key: key[1])
+def test_schema_sent_to_the_model_matches_the_schema_enforced_in_code(key: tuple[str, str]) -> None:
+    sent = REGISTRY.tasks[key].schema_file.schema
+    enforced = task_implementation(*key).output_model.model_json_schema()  # type: ignore[union-attr]
 
     assert _shape(sent, sent) == _shape(enforced, enforced)
 

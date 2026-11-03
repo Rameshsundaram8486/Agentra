@@ -19,6 +19,7 @@ from app.modules.executions.service import ExecutionsService
 from app.modules.identity.authz import PermissionPolicy, load_permission_policy
 from app.modules.identity.service import IdentityService
 from app.modules.projects.service import ProjectsService
+from app.modules.requirements.service import RequirementsService
 from app.modules.workflow.definitions import WorkflowCatalog, WorkflowDefinitionError, load_catalog
 from app.modules.workflow.service import WorkflowService
 
@@ -40,7 +41,8 @@ class Policies:
 
 def _check_cross_references(catalog: WorkflowCatalog, approvals: ApprovalMatrix, agents: AgentRegistry) -> None:
     for number, phase in catalog.phases.items():
-        unknown = set(phase.exit.required_approvals) - set(approvals.artifact_types)
+        required = set(phase.exit.required_approvals).union(*(task.required_approvals for task in phase.tasks))
+        unknown = required - set(approvals.artifact_types)
         if unknown:
             raise WorkflowDefinitionError(
                 f"phase {number} requires approval of unknown artifact types {sorted(unknown)} (see approval_matrix.yaml)"
@@ -52,6 +54,15 @@ def _check_cross_references(catalog: WorkflowCatalog, approvals: ApprovalMatrix,
             raise AgentDefinitionError(f"{name} reads unknown artifact types {sorted(unknown)} (see approval_matrix.yaml)")
         if task.spec.phase not in catalog.phases:
             raise AgentDefinitionError(f"{name} runs in phase {task.spec.phase}, which has no workflow definition")
+        workflow_task = next((t for t in catalog.phase(task.spec.phase).tasks if t.key == task.spec.workflow_task), None)
+        if workflow_task is None or workflow_task.agent != agent_key:
+            raise AgentDefinitionError(f"{name} names workflow task '{task.spec.workflow_task}', which phase {task.spec.phase} does not assign to {agent_key}")
+        unknown = set(task.spec.context_artifact_types) - set(approvals.artifact_types)
+        if unknown:
+            raise AgentDefinitionError(f"{name} reads unknown context artifact types {sorted(unknown)}")
+        unknown = set(task.spec.context_decisions_from) - {key for (a, key) in agents.tasks if a == agent_key}
+        if unknown:
+            raise AgentDefinitionError(f"{name} takes decisions from unknown tasks {sorted(unknown)}")
         lifecycle = catalog.lifecycle(catalog.phase(task.spec.phase).lifecycle)
         unknown = set(task.spec.phase_states) - set(lifecycle.states)
         if unknown:
@@ -120,5 +131,18 @@ class Services:
     @cached_property
     def executions(self) -> ExecutionsService:
         return ExecutionsService(
-            self.session, self.clock, self.audit, self.identity, self.artifacts, self.workflow, self.policies.agents
+            self.session,
+            self.clock,
+            self.audit,
+            self.identity,
+            self.artifacts,
+            self.workflow,
+            self.decisions,
+            self.policies.agents,
+        )
+
+    @cached_property
+    def requirements(self) -> RequirementsService:
+        return RequirementsService(
+            self.session, self.clock, self.audit, self.identity, self.artifacts, self.decisions, self.projects
         )

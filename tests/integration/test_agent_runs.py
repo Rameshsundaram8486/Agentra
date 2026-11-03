@@ -14,11 +14,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.composition import Policies
 from app.harness.runner import AgentRunner
-from app.infrastructure.clock import FixedClock
-from app.infrastructure.job_queue import ClaimedJob, Job
-from app.infrastructure.storage.local import LocalArtifactStore
+from app.infrastructure.job_queue import Job
 from app.model_gateway.errors import ModelProviderError
-from app.model_gateway.gateway import ModelGateway
 from app.model_gateway.providers.base import Attempt, TokenUsage
 from app.model_gateway.providers.fake import FakeProvider, fake_response
 from app.model_gateway.router import Budget
@@ -28,25 +25,10 @@ from app.modules.decisions.service import DecisionOutcomeCreate
 from app.modules.errors import PermissionDeniedError, ValidationFailedError
 from app.modules.executions.models import ModelCall
 from app.modules.executions.schemas import AgentRunCreate
-from tests.agent_support import BRIEF, ba_json, ba_output
+from tests.agent_support import BRIEF, ba_json, ba_output, process
 from tests.support import Team
 
 Run = Callable[..., Any]
-
-
-@pytest.fixture
-def model() -> FakeProvider:
-    return FakeProvider()
-
-
-@pytest.fixture
-def runner_for(
-    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore, model: FakeProvider
-) -> Callable[..., AgentRunner]:
-    def _runner(policies: Policies = policies) -> AgentRunner:
-        return AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, model))
-
-    return _runner
 
 
 def _ask(run: Run, team: Team, version_id: uuid.UUID, actor: Any = None) -> Any:
@@ -55,8 +37,7 @@ def _ask(run: Run, team: Team, version_id: uuid.UUID, actor: Any = None) -> Any:
 
 
 def _process(runner: AgentRunner, run_id: uuid.UUID, attempt: int = 1) -> None:
-    """What the worker does for one claimed job (the queue itself is covered by test_job_queue)."""
-    runner.handle(ClaimedJob(uuid.uuid4(), "agent_run", {"agent_run_id": str(run_id)}, "test", attempt))
+    process(runner, run_id, attempt)
 
 
 def _detail(run: Run, team: Team, run_id: uuid.UUID) -> Any:

@@ -5,12 +5,16 @@ import pytest
 from app.agents.business_analyst.agent import ClarifyBriefOutput
 from app.guardrails.output.forbidden_claims import find_claims
 from app.guardrails.output.grounding import check_quotes, normalise, quote_found
-from app.guardrails.pipeline import check_output
+from app.guardrails.pipeline import Sources, check_output
 from tests.agent_support import BRIEF, ba_json, ba_output
 
 
+def _sources(text: str = BRIEF) -> Sources:
+    return Sources(documents={"BRIEF": text}, names={"BRIEF": "brief"}, default="BRIEF")
+
+
 def _check(raw: str):  # noqa: ANN202
-    return check_output(raw, ClarifyBriefOutput, source_text=BRIEF, source_name="brief")
+    return check_output(raw, ClarifyBriefOutput, sources=_sources())
 
 
 def test_valid_grounded_output_passes() -> None:
@@ -97,10 +101,10 @@ def test_a_claim_in_agent_prose_blocks_but_the_same_words_in_a_quote_do_not() ->
     brief = BRIEF + "\nThe sponsor has approved the budget.\n"
     output = ba_output()
     output["technology_stack"]["source_quotes"] = ["The sponsor has approved the budget."]
-    assert not check_output(json.dumps(output), ClarifyBriefOutput, source_text=brief, source_name="brief").blocked
+    assert not check_output(json.dumps(output), ClarifyBriefOutput, sources=_sources(brief)).blocked
 
     output["technology_stack"]["context"] = "The sponsor has approved the budget, so cost is settled."
-    result = check_output(json.dumps(output), ClarifyBriefOutput, source_text=brief, source_name="brief")
+    result = check_output(json.dumps(output), ClarifyBriefOutput, sources=_sources(brief))
     assert [(f.check, f.path) for f in result.findings] == [("forbidden_claim", "technology_stack.context")]
 
 

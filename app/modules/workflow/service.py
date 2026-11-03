@@ -13,7 +13,13 @@ from sqlalchemy.orm import Session
 from app.infrastructure.clock import Clock
 from app.modules.audit.service import AuditService
 from app.modules.decisions.service import DecisionsService
-from app.modules.errors import ConflictError, InvalidTransitionError, NotFoundError, ValidationFailedError
+from app.modules.errors import (
+    ConflictError,
+    InvalidTransitionError,
+    NotFoundError,
+    PermissionDeniedError,
+    ValidationFailedError,
+)
 from app.modules.identity.service import Actor, IdentityService
 from app.modules.workflow import repository
 from app.modules.workflow.definitions import Lifecycle, PhaseDefinition, WorkflowCatalog
@@ -107,6 +113,65 @@ class WorkflowService:
             for run in repository.phase_runs_for_project(self._session, project_id)
         ]
 
+    def task_by_key(self, project_id: uuid.UUID, phase: int, key: str) -> TaskView | None:
+        """One task of a phase, or None. Callers authorise first. available_transitions is left empty."""
+        run = repository.get_phase_run_for(self._session, project_id, phase)
+        if run is None:
+            return None
+        task = next((t for t in repository.tasks_for_phase_run(self._session, run.id) if t.key == key), None)
+        if task is None:
+            return None
+        return self._task_view(task, self._catalog.lifecycle(self._definition(run).task_lifecycle), frozenset())
+
+    def task_view(self, task_id: uuid.UUID) -> TaskView:
+        """Callers authorise first. available_transitions is left empty."""
+        task = self._load("task", task_id)
+        run = self._load("phase_run", task.phase_run_id)
+        return self._task_view(task, self._catalog.lifecycle(self._definition(run).task_lifecycle), frozenset())  # type: ignore[arg-type]
+
+    def sync_tasks(self, actor: Actor, project_id: uuid.UUID) -> list[str]:
+        """Adds tasks defined in config after the project opened to its unfinished phases. Returns phase.task keys added."""
+        self._identity.require_project(actor, project_id, "project.manage_members")
+        now, added = self._clock.now(), []
+        for run in repository.phase_runs_for_project(self._session, project_id):
+            if run.phase not in self._catalog.phases or run.state in (COMPLETED, CANCELLED):
+                continue
+            definition = self._catalog.phase(run.phase)
+            existing = {task.key for task in repository.tasks_for_phase_run(self._session, run.id)}
+            initial = self._catalog.lifecycle(definition.task_lifecycle).initial_state
+            for position, task in enumerate(definition.tasks):
+                if task.key in existing:
+                    continue
+                repository.add(
+                    self._session,
+                    Task(
+                        phase_run_id=run.id,
+                        project_id=project_id,
+                        key=task.key,
+                        position=position,
+                        title=task.title,
+                        agent=task.agent,
+                        depends_on=list(task.depends_on),
+                        state=initial,
+                        version=1,
+                        created_at=now,
+                        updated_at=now,
+                    ),
+                )
+                added.append(f"{run.phase}.{task.key}")
+            run.definition_version = definition.version
+        if added:
+            self._session.flush()
+            self._audit.record(
+                actor_id=actor.id,
+                action="workflow.sync_tasks",
+                entity_type="project",
+                entity_id=project_id,
+                project_id=project_id,
+                after={"added": added},
+            )
+        return added
+
     def phase_state(self, project_id: uuid.UUID, phase: int) -> str | None:
         """Current state of one phase, or None if the project has no run for it. Callers authorise first."""
         run = repository.get_phase_run_for(self._session, project_id, phase)
@@ -152,9 +217,15 @@ class WorkflowService:
         task = self._load("task", task_id)
         self._identity.require_project(actor, task.project_id, "project.view")
         run = self._load("phase_run", task.phase_run_id)
-        lifecycle = self._catalog.lifecycle(self._definition(run).task_lifecycle)
+        definition = self._definition(run)
+        lifecycle = self._catalog.lifecycle(definition.task_lifecycle)
+        if actor.kind == "agent" and self._identity.agent_key_of(actor) != task.agent:
+            raise PermissionDeniedError("An agent may only move tasks assigned to it")
+        required = next((t.required_approvals for t in definition.tasks if t.key == task.key), ())
 
         def gates(_from_state: str, to_state: str) -> list[str]:
+            if to_state == COMPLETED:
+                return self._decisions.approval_gate_failures(run.project_id, required)
             if to_state != IN_PROGRESS:
                 return []
             siblings = repository.tasks_for_phase_run(self._session, run.id)

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Identity, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,6 +52,7 @@ class StateTransition(Base):
     __tablename__ = "state_transitions"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(always=True), unique=True)  # orders same-instant rows
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"))
     entity_type: Mapped[str] = mapped_column(String(16))
     entity_id: Mapped[uuid.UUID] = mapped_column()

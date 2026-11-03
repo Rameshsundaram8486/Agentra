@@ -1,4 +1,5 @@
-/* Page script: Project workspace - phases with server-approved transitions, documents, agent runs, decisions and team. */
+/* Page script: Project workspace - phases and tasks with server-approved transitions, documents and uploads,
+   requirements, agent runs, decisions and team. */
 
 import { api } from "../../core/api.js";
 import { control, formatDateTime, h, humanise } from "../../core/format.js";
@@ -20,10 +21,11 @@ const dialogForm = document.getElementById("transition-form");
 const dialogError = document.getElementById("transition-error");
 let pending = null;
 
-function openTransition(phase, toState) {
-  pending = { phase, toState };
-  document.getElementById("transition-title").textContent = `Move Phase ${phase.phase} to "${humanise(toState)}"`;
-  document.getElementById("transition-summary").textContent = `${phase.name}: currently ${humanise(phase.state)}.`;
+function openTransition(kind, entity, toState) {
+  pending = { kind, entity, toState };
+  const label = kind === "phase" ? `Phase ${entity.phase}` : `the "${entity.title}" task`;
+  document.getElementById("transition-title").textContent = `Move ${label} to "${humanise(toState)}"`;
+  document.getElementById("transition-summary").textContent = `${kind === "phase" ? entity.name : entity.title}: currently ${humanise(entity.state)}.`;
   dialogForm.reason.value = "";
   dialogError.hidden = true;
   dialog.showModal();
@@ -34,11 +36,12 @@ document.getElementById("transition-cancel").addEventListener("click", () => dia
 
 dialogForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const { phase, toState } = pending;
+  const { kind, entity, toState } = pending;
+  const path = kind === "phase" ? "phase-runs" : "tasks";
   try {
-    await api(`/api/phase-runs/${encodeURIComponent(phase.id)}/transitions`, {
+    await api(`/api/${path}/${encodeURIComponent(entity.id)}/transitions`, {
       method: "POST",
-      body: { to_state: toState, reason: dialogForm.reason.value.trim(), expected_version: phase.version },
+      body: { to_state: toState, reason: dialogForm.reason.value.trim(), expected_version: entity.version },
     });
     dialog.close();
     await loadPhases();
@@ -49,18 +52,18 @@ dialogForm.addEventListener("submit", async (event) => {
   }
 });
 
-function transitionButtons(phase) {
-  if (phase.available_transitions.length === 0) return h("span", { class: "muted small" }, "-");
+function transitionButtons(kind, entity) {
+  if (entity.available_transitions.length === 0) return h("span", { class: "muted small" }, "-");
   return h(
     "div",
     { class: "actions" },
-    phase.available_transitions.map((toState) =>
+    entity.available_transitions.map((toState) =>
       h(
         "button",
         {
           class: `button button-small ${toState === "cancelled" || toState === "blocked" ? "button-danger" : "button-secondary"}`,
           type: "button",
-          onclick: () => openTransition(phase, toState),
+          onclick: () => openTransition(kind, entity, toState),
         },
         humanise(toState),
       ),
@@ -70,7 +73,7 @@ function transitionButtons(phase) {
 
 async function loadPhases() {
   const phases = await api(`/api/projects/${encodeURIComponent(projectId)}/phases`);
-  const rows = phases.map((phase) =>
+  const rows = phases.flatMap((phase) => [
     h(
       "tr",
       {},
@@ -85,9 +88,25 @@ async function loadPhases() {
           : null,
       ),
       h("td", {}, statusBadge(phase.state), h("div", { class: "sub small" }, `v${phase.version} - ${formatDateTime(phase.updated_at)}`)),
-      h("td", {}, transitionButtons(phase)),
+      h("td", {}, transitionButtons("phase", phase)),
     ),
-  );
+    ...phase.tasks.map((task) =>
+      h(
+        "tr",
+        { "data-task": task.key },
+        h("td", { class: "num muted small" }, "task"),
+        h(
+          "td",
+          {},
+          h("div", {}, task.title),
+          h("div", { class: "sub" }, task.agent ? `Agent: ${humanise(task.agent)}` : "People"),
+          task.depends_on.length ? h("div", { class: "sub small" }, `After: ${task.depends_on.map(humanise).join(", ")}`) : null,
+        ),
+        h("td", {}, statusBadge(task.state)),
+        h("td", {}, transitionButtons("task", task)),
+      ),
+    ),
+  ]);
   document.getElementById("phases").replaceChildren(
     h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "#"), h("th", {}, "Phase"), h("th", {}, "State"), h("th", {}, "Actions"))), h("tbody", {}, rows)),
   );
@@ -136,13 +155,17 @@ function runItem(run) {
     h(
       "div",
       {},
-      h("div", {}, `${run.input_title} v${run.input_version_no}`),
+      h("div", {}, `${run.task_title}: ${run.input_title} v${run.input_version_no}`),
+      run.context_documents || run.context_decisions
+        ? h("div", { class: "muted small" }, `Also read ${run.context_documents} other document(s) and ${run.context_decisions} decision(s)`)
+        : null,
       h("div", { class: "muted small" }, `Asked by ${run.requested_by_name ?? "unknown"} - ${formatDateTime(run.created_at)}`),
       meta.length ? h("div", { class: "muted small" }, meta.join(" - ")) : null,
       run.status === "queued" ? h("div", { class: "muted small" }, "Waiting for the agent worker (scripts\\run_workers.ps1).") : null,
-      run.status === "succeeded"
-        ? h("div", { class: "small" }, h("a", { href: `decisions.html?id=${encodeURIComponent(projectId)}` }, `${run.decision_ids.length} questions are in the decision inbox`))
+      run.status === "succeeded" && run.decision_ids.length
+        ? h("div", { class: "small" }, h("a", { href: `decisions.html?id=${encodeURIComponent(projectId)}` }, `${run.decision_ids.length} question(s) are in the decision inbox`))
         : null,
+      run.status === "succeeded" && run.task_key === "draft_requirements" ? h("div", { class: "small" }, "The draft is in Requirements below.") : null,
       run.error_message ? h("div", { class: "small" }, run.error_message) : null,
       blocking.length ? h("ul", { class: "bullets small" }, blocking.map((finding) => h("li", {}, finding.path ? `${finding.path}: ${finding.message}` : finding.message))) : null,
       warnings.length ? h("div", { class: "muted small" }, `Noted: ${warnings.map((finding) => finding.message).join("; ")}`) : null,
@@ -155,16 +178,145 @@ async function loadAgentRuns() {
   const runs = await api(`/api/projects/${encodeURIComponent(projectId)}/agent-runs`);
   document.getElementById("agent-runs").replaceChildren(...runs.map(runItem));
   const busy = runs.some((run) => run.status === "queued" || run.status === "running");
-  if (runsBusy && !busy) loadDecisionSummary().catch(() => {});
+  if (runsBusy && !busy) refreshAfterRun().catch(() => {});
   runsBusy = busy;
   clearTimeout(runPoll);
   if (busy) runPoll = setTimeout(() => loadAgentRuns().catch(() => {}), RUN_POLL_MS);
 }
 
+// Requirements -------------------------------------------------------------------------------
+
+function flagLines(flags) {
+  return flags.map((flag) => h("div", { class: flag.severity === "warning" ? "small" : "muted small" }, `${flag.severity === "warning" ? "Warning" : "Note"}: ${flag.message}`));
+}
+
+async function loadRequirements() {
+  const section = document.getElementById("requirements-section");
+  const view = await api(`/api/projects/${encodeURIComponent(projectId)}/requirements`);
+  section.hidden = false;
+  document.getElementById("requirements").hidden = !view;
+  if (!view) {
+    document.getElementById("requirements-summary").replaceChildren(
+      h("p", { class: "muted" }, "Not drafted yet. Ask the Business Analyst agent to draft the requirements once the brief has been clarified."),
+    );
+    document.getElementById("requirements").replaceChildren();
+    return;
+  }
+  const changes = view.version_no > 1 ? ` Added: ${view.added.join(", ") || "none"}. Removed: ${view.removed.join(", ") || "none"}.` : "";
+  document.getElementById("requirements-summary").replaceChildren(
+    h(
+      "div",
+      { class: "section-header" },
+      h("a", { class: "primary", href: `artifact.html?id=${encodeURIComponent(view.artifact_id)}` }, `${view.artifact_title} v${view.version_no}`),
+      statusBadge(view.approval_status),
+    ),
+    h("p", {}, view.summary),
+    h("p", { class: "muted small" }, `${view.counts.confirmed} confirmed, ${view.counts.proposed} proposed, ${view.counts.open} open.${changes} Review and approve it on the document page.`),
+    ...flagLines(view.set_flags),
+  );
+  const rows = view.items.map((item) =>
+    h(
+      "tr",
+      {},
+      h("td", { class: "num" }, item.item_id),
+      h(
+        "td",
+        {},
+        h("div", { class: "primary" }, item.title),
+        h("div", { class: "sub" }, item.statement),
+        item.acceptance_criteria.length ? h("ul", { class: "bullets small" }, item.acceptance_criteria.map((c) => h("li", {}, c))) : null,
+        ...flagLines(item.quality_flags),
+      ),
+      h("td", { class: "small" }, humanise(item.kind), h("div", { class: "sub" }, humanise(item.label))),
+      h("td", {}, statusBadge(item.status)),
+    ),
+  );
+  document.getElementById("requirements").replaceChildren(
+    h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "ID"), h("th", {}, "Requirement"), h("th", {}, "Kind"), h("th", {}, "Status"))), h("tbody", {}, rows)),
+  );
+}
+
+async function refreshAfterRun() {
+  await Promise.all([
+    loadPhases(),
+    loadDecisionSummary(),
+    loadRequirements(),
+    loadDocuments().then((artifacts) => fillBriefs(artifacts)),
+  ]);
+}
+
+// Uploads ------------------------------------------------------------------------------------
+
+function readAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",", 2)[1] ?? "");
+    reader.onerror = () => reject(new Error("The file could not be read"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function enableUpload() {
+  const toggle = document.getElementById("upload-toggle");
+  const section = document.getElementById("upload");
+  const form = document.getElementById("upload-form");
+  const error = document.getElementById("upload-error");
+  const submit = document.getElementById("upload-submit");
+  toggle.hidden = false;
+  toggle.addEventListener("click", () => {
+    section.hidden = false;
+    toggle.hidden = true;
+  });
+  document.getElementById("upload-cancel").addEventListener("click", () => {
+    section.hidden = true;
+    toggle.hidden = false;
+  });
+  control(form, "file").addEventListener("change", () => {
+    const title = control(form, "title");
+    if (!title.value && control(form, "file").files[0]) title.value = control(form, "file").files[0].name.replace(/\.[^.]+$/, "");
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    error.hidden = true;
+    const file = control(form, "file").files[0];
+    if (!file) return;
+    submit.disabled = true;
+    try {
+      const artifact = await api(`/api/projects/${encodeURIComponent(projectId)}/artifacts/upload`, {
+        method: "POST",
+        body: {
+          artifact_type: form.artifact_type.value,
+          title: control(form, "title").value.trim(),
+          filename: file.name,
+          origin: control(form, "origin").value.trim(),
+          content_base64: await readAsBase64(file),
+        },
+      });
+      location.assign(`artifact.html?id=${encodeURIComponent(artifact.id)}`);
+    } catch (failure) {
+      error.textContent = failure.message;
+      error.hidden = false;
+    } finally {
+      submit.disabled = false;
+    }
+  });
+}
+
+// Agent ----------------------------------------------------------------------------------------
+
+function fillBriefs(artifacts) {
+  const briefs = artifacts.filter((artifact) => artifact.artifact_type === "project_brief");
+  const form = document.getElementById("agent-form");
+  form.artifact_version_id.replaceChildren(
+    ...briefs.map((brief) => h("option", { value: brief.current_version.id }, `${brief.title} (v${brief.current_version_no})`)),
+  );
+  return briefs;
+}
+
 function enableAgent(artifacts, canRun) {
   document.getElementById("agent-section").hidden = false;
   if (!canRun) return;
-  const briefs = artifacts.filter((artifact) => artifact.artifact_type === "project_brief");
+  const briefs = fillBriefs(artifacts);
   if (briefs.length === 0) {
     document.getElementById("agent-no-brief").hidden = false;
     return;
@@ -172,9 +324,6 @@ function enableAgent(artifacts, canRun) {
   const form = document.getElementById("agent-form");
   const message = document.getElementById("agent-error");
   const submit = document.getElementById("agent-submit");
-  form.artifact_version_id.replaceChildren(
-    ...briefs.map((brief) => h("option", { value: brief.current_version.id }, `${brief.title} (v${brief.current_version_no})`)),
-  );
   form.hidden = false;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -183,14 +332,14 @@ function enableAgent(artifacts, canRun) {
     try {
       const result = await api(`/api/projects/${encodeURIComponent(projectId)}/agent-runs`, {
         method: "POST",
-        body: { agent_key: "business_analyst", task_key: "clarify_brief", artifact_version_id: form.artifact_version_id.value },
+        body: { agent_key: "business_analyst", task_key: control(form, "task_key").value, artifact_version_id: form.artifact_version_id.value },
       });
       if (!result.created) {
         message.className = "alert alert-info";
-        message.textContent = "The agent has already been asked about this version; see its run below.";
+        message.textContent = "The agent has already done this task with exactly these inputs; see its run below.";
         message.hidden = false;
       }
-      await loadAgentRuns();
+      await Promise.all([loadAgentRuns(), loadPhases()]);
     } catch (failure) {
       message.className = "alert alert-error";
       message.textContent = failure.message;
@@ -299,13 +448,17 @@ startPage(async () => {
     link.hidden = false;
   }
   if (can("project.manage_members")) enableAddMember();
-  if (can("artifact.author")) enableNewDocument(types);
+  if (can("artifact.author")) {
+    enableNewDocument(types);
+    enableUpload();
+  }
   const [, , artifacts] = await Promise.all([
     loadPhases(),
     loadMembers(),
     can("artifact.view") ? loadDocuments() : Promise.resolve([]),
     can("decision.view") ? loadDecisionSummary() : Promise.resolve(),
   ]);
+  if (can("artifact.view")) await loadRequirements();
   if (can("agent_run.view")) {
     enableAgent(artifacts, can("agent.run"));
     await loadAgentRuns();

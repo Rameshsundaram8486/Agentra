@@ -7,6 +7,8 @@ worker starts, because either can change in between. Workers call start_run / fi
 methods; people only request and read.
 """
 
+import hashlib
+import json
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -23,7 +25,8 @@ from app.model_gateway.errors import BudgetExceededError
 from app.model_gateway.gateway import CallIntent, CallOutcome
 from app.modules.artifacts.service import ArtifactsService
 from app.modules.audit.service import AuditService
-from app.modules.errors import NotFoundError, ValidationFailedError
+from app.modules.decisions.service import DecisionsService
+from app.modules.errors import DomainError, InvalidTransitionError, NotFoundError, PermissionDeniedError, ValidationFailedError
 from app.modules.executions import repository
 from app.modules.executions.models import AgentRun, ModelCall
 from app.modules.executions.schemas import (
@@ -36,14 +39,26 @@ from app.modules.executions.schemas import (
     RunStatus,
     StartedRun,
 )
-from app.modules.identity.service import Actor, IdentityService
-from app.modules.workflow.service import WorkflowService
+from app.modules.identity.service import SYSTEM_ACTOR, Actor, IdentityService
+from app.modules.workflow.service import TaskView, TransitionRequest, WorkflowService
 
 __all__ = ["AGENT_RUN_JOB", "AgentRunCreate", "AgentRunDetail", "AgentRunView", "ExecutionsService", "StartedRun"]
 
 AGENT_RUN_JOB = "agent_run"
 _ACTIVE = ("queued", "running", "succeeded")
+_BUSY = ("queued", "running")
 _TERMINAL = ("succeeded", "failed", "blocked")
+# How asking for a run moves its workflow task to in_progress, from each state.
+_START_PATHS: dict[str, list[str]] = {
+    "not_started": ["ready", "in_progress"],
+    "ready": ["in_progress"],
+    "blocked": ["ready", "in_progress"],
+    "failed": ["ready", "in_progress"],
+    "waiting_for_input": ["in_progress"],
+    "changes_requested": ["in_progress"],
+    "waiting_for_review": ["changes_requested", "in_progress"],
+    "in_progress": [],
+}
 
 
 def _month_start(now: datetime) -> datetime:
@@ -59,6 +74,7 @@ class ExecutionsService:
         identity: IdentityService,
         artifacts: ArtifactsService,
         workflow: WorkflowService,
+        decisions: DecisionsService,
         registry: AgentRegistry,
     ) -> None:
         self._session = session
@@ -67,6 +83,7 @@ class ExecutionsService:
         self._identity = identity
         self._artifacts = artifacts
         self._workflow = workflow
+        self._decisions = decisions
         self._registry = registry
 
     # Requests and reads ---------------------------------------------------------------------
@@ -85,11 +102,21 @@ class ExecutionsService:
         if problems or blockers:
             raise ValidationFailedError(f"The {task.agent_name} cannot start yet: {'; '.join(problems + blockers)}")
         assert agent is not None
+        workflow_task = self._workflow.task_by_key(project_id, task.spec.phase, task.spec.workflow_task)
+        if workflow_task is None:
+            raise ValidationFailedError(f"This project has no '{task.spec.workflow_task}' task in Phase {task.spec.phase}")
+        if workflow_task.state not in _START_PATHS:
+            raise InvalidTransitionError(f"The '{workflow_task.title}' task is {workflow_task.state.replace('_', ' ')}")
 
+        context = self._context_snapshot(actor, project_id, task)
+        fingerprint = hashlib.sha256(json.dumps({"input": str(record.id), **context}, sort_keys=True).encode()).hexdigest()[:16]
         earlier = repository.runs_for_input(self._session, task.agent_key, task.key, record.id)
-        active = next((run for run in reversed(earlier) if run.status in _ACTIVE), None)
-        if active is not None:
-            return RunRequestResult(run=self._views([active])[0], created=False)
+        same = next((r for r in reversed(earlier) if r.status in _ACTIVE and r.input_refs.get("fingerprint") == fingerprint), None)
+        if same is not None:
+            return RunRequestResult(run=self._views([same])[0], created=False)
+        busy = [r for r in repository.runs_for_project(self._session, project_id) if r.task_id == workflow_task.id and r.status in _BUSY]
+        if busy:
+            raise InvalidTransitionError(f"The {task.agent_name} is already working on '{workflow_task.title}'; wait for that run to finish")
 
         now = self._clock.now()
         run = AgentRun(
@@ -101,7 +128,9 @@ class ExecutionsService:
             prompt_version=task.prompt.version,
             schema_version=task.schema_file.version,
             input_artifact_version_id=record.id,
-            idempotency_key=f"{task.agent_key}.{task.key}:{record.id}:{len(earlier) + 1}",
+            input_refs={**context, "fingerprint": fingerprint},
+            task_id=workflow_task.id,
+            idempotency_key=f"{task.agent_key}.{task.key}:{record.id}:{fingerprint}:{len(earlier) + 1}",
             status="queued",
             attempts=0,
             max_attempts=task.spec.max_attempts,
@@ -118,6 +147,7 @@ class ExecutionsService:
             # Someone asked for the same thing at the same moment; theirs won.
             winner = next(r for r in repository.runs_for_input(self._session, task.agent_key, task.key, record.id) if r.status in _ACTIVE)
             return RunRequestResult(run=self._views([winner])[0], created=False)
+        self._start_task(workflow_task, f"Asked the {task.agent_name}: {task.spec.title}", actor, agent)
         run.job_id = JobQueue(self._session, self._clock).enqueue(
             AGENT_RUN_JOB, {"agent_run_id": str(run.id)}, run.idempotency_key, max_attempts=task.spec.max_attempts
         )
@@ -133,6 +163,7 @@ class ExecutionsService:
                 "task": task.key,
                 "input": {"artifact_id": str(record.artifact_id), "version_no": record.version_no, "sha256": record.content_sha256},
                 "prompt_version": run.prompt_version,
+                "context": context,
             },
         )
         return RunRequestResult(run=self._views([run])[0], created=True)
@@ -171,6 +202,8 @@ class ExecutionsService:
         run.updated_at = now
         task = self._registry.task(run.agent_key, run.task_key)
         blockers = ["this agent task no longer exists"] if task is None else self._readiness(run.project_id, task)[1]
+        if run.task_id is not None and (current := self._workflow.task_view(run.task_id)).state != "in_progress":
+            blockers.append(f"the '{current.title}' task is now {current.state.replace('_', ' ')}")
         if blockers:
             self._session.flush()
             self.finish_run(run.id, status="blocked", error_code="precondition", error_message="; ".join(blockers))
@@ -183,6 +216,8 @@ class ExecutionsService:
             task_key=run.task_key,
             agent=self._identity.get_actor(run.agent_user_id),
             input_artifact_version_id=run.input_artifact_version_id,
+            input_refs=dict(run.input_refs or {}),
+            task_id=run.task_id,
             attempt=run.attempts,
             max_attempts=run.max_attempts,
         )
@@ -196,7 +231,10 @@ class ExecutionsService:
         findings: list[dict[str, Any]] | None = None,
         error_code: str | None = None,
         error_message: str | None = None,
+        task_state: str | None = None,
     ) -> None:
+        """Records the outcome and moves the workflow task: to task_state if given, otherwise to failed or blocked
+        for a failed or blocked run. A task someone already moved elsewhere is left alone."""
         run = repository.get_run(self._session, run_id, for_update=True)
         if run is None:
             raise NotFoundError("Agent run not found")
@@ -228,6 +266,12 @@ class ExecutionsService:
                 "cost_usd": str(run.cost_usd),
             },
         )
+        target = task_state or {"failed": "failed", "blocked": "blocked"}.get(status)
+        if run.task_id is not None and target is not None:
+            agent = self._identity.get_actor(run.agent_user_id)
+            actor = agent if target in ("waiting_for_input", "waiting_for_review") else SYSTEM_ACTOR
+            reason = f"Agent run {status}" + (f": {run.error_message}" if run.error_message else "")
+            self._move_task(run.task_id, target, actor, reason[:2000])
 
     # Spend ledger (called by the model gateway through the harness) -------------------------
 
@@ -297,7 +341,61 @@ class ExecutionsService:
     def month_spend(self) -> Decimal:
         return repository.spend_since(self._session, _month_start(self._clock.now()))
 
+    def link_earlier_runs(self, actor: Actor, project_id: uuid.UUID) -> int:
+        """Links runs made before their workflow task existed (projects opened before Increment 3a), and moves a
+        task whose run already succeeded to waiting for input. Returns how many runs were linked."""
+        self._identity.require_project(actor, project_id, "project.manage_members")
+        linked = 0
+        for run in repository.unlinked_runs(self._session, project_id):
+            task = self._registry.task(run.agent_key, run.task_key)
+            view = self._workflow.task_by_key(project_id, task.spec.phase, task.spec.workflow_task) if task else None
+            if view is None:
+                continue
+            run.task_id = view.id
+            linked += 1
+            if run.status == "succeeded" and view.state == "not_started":
+                self._session.flush()
+                agent = self._identity.get_actor(run.agent_user_id)
+                for target, mover in (("ready", SYSTEM_ACTOR), ("in_progress", SYSTEM_ACTOR), ("waiting_for_input", agent)):
+                    self._move_task(view.id, target, mover, "Linked to an agent run made before this task existed")
+        self._session.flush()
+        return linked
+
     # Helpers --------------------------------------------------------------------------------
+
+    def _context_snapshot(self, actor: Actor, project_id: uuid.UUID, task: TaskDefinition) -> dict[str, Any]:
+        documents = [
+            str(record.id)
+            for artifact_type in task.spec.context_artifact_types
+            for record in sorted(self._artifacts.current_records_of_type(project_id, artifact_type), key=lambda r: r.artifact_title)
+        ]
+        decision_ids: list[str] = []
+        for run in repository.succeeded_runs(self._session, project_id, task.agent_key, task.spec.context_decisions_from):
+            decision_ids += [value for value in (run.output or {}).get("decision_ids", []) if value not in decision_ids]
+        decisions = [
+            {"id": value, "outcomes": len(self._decisions.get_decision(actor, uuid.UUID(value)).outcomes)} for value in decision_ids
+        ]
+        return {"documents": documents, "decisions": decisions}
+
+    def _start_task(self, task: TaskView, reason: str, requester: Actor, agent: Actor) -> None:
+        """Moves the task to in_progress, each step as the requester, or as the agent where only it may."""
+        for target in _START_PATHS[task.state]:
+            try:
+                self._move_task(task.id, target, requester, reason, strict=True)
+            except PermissionDeniedError:
+                self._move_task(task.id, target, agent, reason, strict=True)
+
+    def _move_task(self, task_id: uuid.UUID, target: str, actor: Actor, reason: str, *, strict: bool = False) -> None:
+        current = self._workflow.task_view(task_id)
+        if current.state == target:
+            return
+        try:
+            self._workflow.transition_task(
+                actor, task_id, TransitionRequest(to_state=target, reason=reason, expected_version=current.version)
+            )
+        except DomainError:
+            if strict:
+                raise
 
     def _readiness(self, project_id: uuid.UUID, task: TaskDefinition) -> tuple[Actor | None, list[str]]:
         blockers = []
@@ -323,6 +421,7 @@ class ExecutionsService:
             task = self._registry.task(run.agent_key, run.task_key)
             record = self._artifacts.version_record(run.input_artifact_version_id)
             answered = [call.model for call in calls_by_run.get(run.id, []) if call.model]
+            refs = run.input_refs or {}
             views.append(
                 AgentRunView(
                     id=run.id,
@@ -336,6 +435,9 @@ class ExecutionsService:
                     input_artifact_version_id=record.id,
                     input_title=record.artifact_title,
                     input_version_no=record.version_no,
+                    context_documents=len(refs.get("documents", [])),
+                    context_decisions=len(refs.get("decisions", [])),
+                    task_id=run.task_id,
                     requested_by=run.requested_by,
                     requested_by_name=names.get(run.requested_by),
                     attempts=run.attempts,

@@ -183,6 +183,11 @@ class IdentityService:
         user = self._session.scalar(select(User).where(User.agent_key == agent_key, User.is_active.is_(True)))
         return _to_actor(user) if user else None
 
+    def agent_key_of(self, actor: Actor) -> str | None:
+        if actor.kind != "agent":
+            return None
+        return self._session.scalar(select(User.agent_key).where(User.id == actor.id))
+
     def display_names(self, user_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
         if not user_ids:
             return {}

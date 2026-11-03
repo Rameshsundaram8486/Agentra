@@ -1,0 +1,2 @@
+# Declarative config is hashed (prompt and schema versions), so its bytes must not depend on the checkout.
+config/** text eol=lf

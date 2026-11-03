@@ -81,6 +81,8 @@ class TaskDefinition(BaseModel):
     title: str
     agent: str | None = None
     depends_on: tuple[str, ...] = ()
+    # Artifact types whose current versions must all be approved before the task can be completed.
+    required_approvals: tuple[str, ...] = ()
 
 
 class EntryRule(BaseModel):

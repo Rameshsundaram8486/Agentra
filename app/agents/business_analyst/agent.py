@@ -12,10 +12,11 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.agents.base import PreparedPrompt
+from app.agents.base import ApplyResult, PreparedPrompt
 from app.composition import Services
 from app.guardrails.input.scope import input_problems
-from app.guardrails.pipeline import check_input
+from app.guardrails.findings import Finding
+from app.guardrails.pipeline import Sources, check_input
 from app.harness.registry import TaskDefinition
 from app.modules.decisions.schemas import DecisionOption, DecisionRequestCreate
 from app.modules.errors import ValidationFailedError
@@ -161,14 +162,18 @@ class ClarifyBrief:
             "Produce the brief summary, the technology stack decision, the delivery approach decision and the "
             "clarifying questions, as described in your instructions."
         )
+        name = f"project brief '{record.artifact_title}' v{record.version_no}"
         return PreparedPrompt(
             user=user,
-            source_text=brief.text,
-            source_name=f"project brief '{record.artifact_title}' v{record.version_no}",
+            sources=Sources(documents={"BRIEF": brief.text}, names={"BRIEF": name}, default="BRIEF"),
             input_findings=brief.findings,
         )
 
-    def apply(self, services: Services, run: StartedRun, output: ClarifyBriefOutput) -> list[uuid.UUID]:  # type: ignore[override]
+    def check(self, output: ClarifyBriefOutput, prepared: PreparedPrompt) -> list[Finding]:  # type: ignore[override]
+        return []
+
+    def apply(self, services: Services, run: StartedRun, output: ClarifyBriefOutput, prepared: PreparedPrompt) -> ApplyResult:  # type: ignore[override]
+        """Questions wait for people to answer them, so the task waits for input."""
         record = services.artifacts.version_record(run.input_artifact_version_id)
         brief = f"{record.artifact_title} v{record.version_no}"
         requests = [
@@ -176,7 +181,8 @@ class ClarifyBrief:
             self._decision_request(output.delivery_approach, brief, record.id),
             *(self._question_request(question, brief, record.id) for question in output.clarifying_questions),
         ]
-        return [services.decisions.raise_decision(run.agent, run.project_id, request).id for request in requests]
+        ids = [services.decisions.raise_decision(run.agent, run.project_id, request).id for request in requests]
+        return ApplyResult(decision_ids=ids, task_state="waiting_for_input")
 
     @staticmethod
     def _options(items: list[tuple[str, str, str]]) -> list[DecisionOption]:

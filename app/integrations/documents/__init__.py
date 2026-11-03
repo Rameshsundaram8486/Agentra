@@ -1,4 +1,1 @@
-"""Document processing.
-
-Scaffold only: not implemented yet.
-"""
+"""Document handling: text extraction from uploads (extraction.py). Export arrives with reports."""

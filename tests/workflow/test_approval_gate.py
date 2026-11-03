@@ -14,6 +14,14 @@ from tests.support import Team
 Run = Callable[..., Any]
 
 
+@pytest.fixture
+def team(make_team: Callable[..., Team], close_tasks: Callable[..., None]) -> Team:
+    """These tests are about phase gates, so Phase 7's own tasks are closed first."""
+    team = make_team()
+    close_tasks(team, 7)
+    return team
+
+
 def _phase_7_in_review(run: Run, team: Team) -> PhaseRunView:
     phase = next(p for p in run(lambda s: s.workflow.list_phase_runs(team.owner.actor, team.project.id)) if p.phase == 7)
     for user, state in ((team.owner, "ready"), (team.pm, "in_progress"), (team.agent, "waiting_for_review")):

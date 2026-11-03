@@ -32,6 +32,10 @@ class AgentRun(Base):
     prompt_version: Mapped[str] = mapped_column(String(100))
     schema_version: Mapped[str] = mapped_column(String(100))
     input_artifact_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artifact_versions.id"))
+    # Everything else the run read, fixed when it was asked: {"documents": [version ids],
+    # "decisions": [{"id", "outcomes"}], "fingerprint": ...}. The same inputs never produce a second run.
+    input_refs: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    task_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("tasks.id"))  # the workflow task it works on
     idempotency_key: Mapped[str] = mapped_column(String(200), unique=True)
     status: Mapped[str] = mapped_column(String(16))
     attempts: Mapped[int] = mapped_column(Integer, default=0)

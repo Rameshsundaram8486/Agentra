@@ -54,9 +54,14 @@ Agent runs need the Claude API and a worker process:
 1. Put `ANTHROPIC_API_KEY=...` in `.env` (never in source or chat). Use synthetic briefs only until real customer data is approved for this environment (ADR 0001).
 2. Start the worker in a second terminal: `powershell -ExecutionPolicy Bypass -File scripts\run_workers.ps1`.
 3. `uv run python -m app.cli seed-demo` gives the demo project a synthetic brief and moves Phase 7 to in progress.
-4. On the project page, choose the brief and click **Ask the Business Analyst agent**. After a minute or two the run shows as succeeded and its questions are in the decision inbox.
+4. On the project page, choose **Ask about the brief** and the brief, and click **Ask the Business Analyst agent**. After a minute or two the run shows as succeeded and its questions are in the decision inbox.
+5. Answer the questions in the decision inbox, then close the **Clarify the project brief** task in the Phases table (*completed*).
+6. Optionally upload source documents (**Upload file**: .txt, .md, .docx or .pdf), then choose **Draft the requirements**. The draft appears under **Requirements** and as the *Business requirements* document; its open questions go to the inbox.
+7. Answer them and ask again for a revised draft, or have a reviewer approve the document and complete the draft task.
 
-- Each run costs roughly $0.15-0.50 at effort `high`; the run list shows the cost. `budget.monthly_usd` in `config/models.yaml` (default $50) stops new calls once this month's spend plus the next call's worst case would exceed it.
+`seed-demo` also adds tasks defined after a project was opened (for projects from before Increment 3a) and links earlier agent runs to them.
+
+- A clarify run costs roughly $0.15-0.30 and a requirements draft roughly $0.30-0.80 at effort `high`; the run list shows the cost. `budget.monthly_usd` in `config/models.yaml` (default $50) stops new calls once this month's spend plus the next call's worst case would exceed it.
 - Model, effort and token limits per agent are in `config/models.yaml`; the prompt and output schema are in `config/agents/business_analyst/`.
 
 ## Testing

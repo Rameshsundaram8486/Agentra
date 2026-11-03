@@ -4,6 +4,8 @@ Content goes to the content-addressed store; metadata goes to PostgreSQL. A vers
 editing an artifact always adds a new version, and every read re-checks the content hash.
 """
 
+import base64
+import binascii
 import difflib
 import uuid
 from collections.abc import Mapping
@@ -12,11 +14,13 @@ from sqlalchemy.orm import Session
 
 from app.infrastructure.clock import Clock
 from app.infrastructure.storage.base import ArtifactStore, ContentIntegrityError
+from app.integrations.documents.extraction import ExtractionError, extract
 from app.modules.artifacts import repository
 from app.modules.artifacts.models import Artifact, ArtifactVersion
 from app.modules.artifacts.schemas import (
     MAX_CONTENT_BYTES,
     ArtifactCreate,
+    UploadCreate,
     ArtifactDetail,
     ArtifactVersionView,
     ArtifactView,
@@ -38,6 +42,7 @@ __all__ = [
     "VersionContent",
     "VersionCreate",
     "VersionDiff",
+    "UploadCreate",
     "VersionRecord",
 ]
 
@@ -134,6 +139,52 @@ class ArtifactsService:
             after={"version_no": previous + 1, "content_sha256": digest},
         )
         return self._detail(artifact, repository.versions_for(self._session, artifact.id))
+
+    def upload(self, actor: Actor, project_id: uuid.UUID, data: UploadCreate) -> ArtifactDetail:
+        """Extracts the text of an uploaded file and stores it as a version; the original file is kept by its hash."""
+        self._identity.require_project(actor, project_id, "artifact.author")
+        data = UploadCreate.model_validate(data)
+        try:
+            raw = base64.b64decode(data.content_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValidationFailedError("The file content is not valid base64") from exc
+        try:
+            extracted = extract(data.filename, raw)
+        except ExtractionError as exc:
+            raise ValidationFailedError(f"{data.filename}: {exc}") from exc
+        original = self._store.put(raw)
+        filename = data.filename.replace("\\", "/").rsplit("/", 1)[-1]
+        pages = f", {extracted.pages} pages" if extracted.pages else ""
+        sources = [
+            f"File: {filename} ({extracted.file_type}{pages})",
+            f"Original file sha256: {original}",
+            f"Origin: {data.origin.strip()}",
+            *(f"Extraction note: {warning}" for warning in extracted.warnings),
+        ]
+        title = data.title.strip()
+        existing = repository.get_by_title(self._session, project_id, data.artifact_type, title)
+        if existing is None:
+            return self.create_artifact(
+                actor,
+                project_id,
+                ArtifactCreate(
+                    artifact_type=data.artifact_type,
+                    title=title,
+                    content=extracted.text,
+                    change_summary=f"Uploaded {filename}",
+                    source_refs=sources,
+                ),
+            )
+        return self.add_version(
+            actor,
+            existing.id,
+            VersionCreate(
+                content=extracted.text,
+                change_summary=f"Uploaded {filename}",
+                source_refs=sources,
+                expected_current_version=existing.current_version_no,
+            ),
+        )
 
     # Reading --------------------------------------------------------------------------------
 

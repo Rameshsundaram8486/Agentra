@@ -1,6 +1,6 @@
 # Model routing for every agent call. All calls go through app/model_gateway; nothing else talks to a provider.
 #
-# defaults apply to every agent; agents.<key> overrides them for one agent.
+# defaults apply to every agent; agents.<key> overrides them for one agent, and agents.<key>.tasks.<task> for one task.
 # effort: low | medium | high | xhigh | max. claude-opus-5-5 always thinks, so effort is the only depth control,
 #   and it defaults to medium if not sent, so the gateway always sends it.
 # refusal_fallback: when the model declines on policy grounds, the API re-runs the request on Anthropic's
@@ -24,6 +24,9 @@ agents:
   business_analyst:
     effort: high
     max_tokens: 24000
+    tasks:
+      draft_requirements:
+        max_tokens: 64000   # a full requirements set with acceptance criteria is long
 
 budget:
   monthly_usd: 50

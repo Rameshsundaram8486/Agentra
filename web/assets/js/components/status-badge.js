@@ -21,6 +21,9 @@ const TONE = {
   open: "info",
   deferred: "warning",
   decided: "success",
+  // requirement items
+  confirmed: "success",
+  proposed: "warning",
   // agent runs
   queued: "info",
   running: "accent",

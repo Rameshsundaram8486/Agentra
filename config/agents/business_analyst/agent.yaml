@@ -18,8 +18,25 @@ tasks:
       Reads a project brief and asks the project team to decide the technology stack and delivery approach,
       and to answer questions about gaps or ambiguities in the brief.
     phase: 7
+    workflow_task: clarify_brief
     phase_states: [in_progress, waiting_for_input]
     input_artifact_types: [project_brief]
     prompt: prompts/clarify_brief.v1.md
     output_schema: schemas/clarify_brief.v1.json
+    max_attempts: 2
+
+  draft_requirements:
+    title: Draft the requirements
+    description: >
+      Drafts objectives, stakeholders, functional and non-functional requirements, user stories with
+      acceptance criteria, business rules, assumptions, dependencies and open questions from the brief,
+      the source documents and the team's answers, each labelled and linked to its sources.
+    phase: 7
+    workflow_task: draft_requirements
+    phase_states: [in_progress, waiting_for_input]
+    input_artifact_types: [project_brief]
+    context_artifact_types: [source_document]
+    context_decisions_from: [clarify_brief, draft_requirements]  # including answers to its own open questions
+    prompt: prompts/draft_requirements.v1.md
+    output_schema: schemas/draft_requirements.v1.json
     max_attempts: 2

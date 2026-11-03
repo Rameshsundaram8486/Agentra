@@ -28,6 +28,16 @@ class VersionCreate(BaseModel):
     expected_current_version: int = Field(ge=1, description="The version the author started from")
 
 
+class UploadCreate(BaseModel):
+    """A file to turn into a document version. A title that already exists for the type gets a new version."""
+
+    artifact_type: str = Field(default="source_document", pattern=r"^[a-z][a-z0-9_]{1,63}$")
+    title: str = Field(min_length=1, max_length=200)
+    filename: str = Field(min_length=1, max_length=255)
+    content_base64: str = Field(min_length=1, max_length=14_000_000)
+    origin: str = Field(min_length=3, max_length=500, description="Where it came from, e.g. 'Emailed by the customer's HR lead, 2 Nov'")
+
+
 class ArtifactVersionView(BaseModel):
     id: uuid.UUID
     artifact_id: uuid.UUID

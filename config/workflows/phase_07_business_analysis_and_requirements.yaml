@@ -1,5 +1,7 @@
 # Phase 7 - Business Analysis and Requirements: states, tasks, entry/exit gates, required approvals. Primary agent: business_analyst.
-# Tasks are defined in Increment 3 (Phase 7 slice).
+# The agent tasks behind these are in config/agents/business_analyst/agent.yaml (workflow_task).
+# Review is the draft task's waiting_for_review step: it can only complete once a person has approved the
+# current requirements baseline. Change requests against an approved baseline arrive in Increment 3b.
 key: phase_07_business_analysis_and_requirements
 version: 1
 phase: 7
@@ -11,4 +13,12 @@ entry:
   requires_completed_phases: []
 exit:
   required_approvals: [requirements_baseline]
-tasks: []
+tasks:
+  - key: clarify_brief
+    title: Clarify the project brief
+    agent: business_analyst
+  - key: draft_requirements
+    title: Draft and review the requirements
+    agent: business_analyst
+    depends_on: [clarify_brief]
+    required_approvals: [requirements_baseline]

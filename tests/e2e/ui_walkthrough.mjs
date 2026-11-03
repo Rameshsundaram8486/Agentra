@@ -70,6 +70,12 @@ const js = (value) => JSON.stringify(value);
 function fill(selector, value) {
   return evaluate(`(() => { const el = document.querySelector(${js(selector)}); el.value = ${js(value)}; el.dispatchEvent(new Event('input', {bubbles: true})); el.dispatchEvent(new Event('change', {bubbles: true})); return true; })()`);
 }
+async function setFile(selector, path) {
+  const { root } = await send("DOM.getDocument", { depth: 0 });
+  const { nodeId } = await send("DOM.querySelector", { nodeId: root.nodeId, selector });
+  await send("DOM.setFileInputFiles", { nodeId, files: [path] });
+  await evaluate(`(document.querySelector(${js(selector)}).dispatchEvent(new Event('change', {bubbles: true})), true)`);
+}
 const click = (selector) => evaluate(`(document.querySelector(${js(selector)}).click(), true)`);
 const text = (selector) => evaluate(`document.querySelector(${js(selector)})?.innerText ?? ''`);
 
@@ -126,7 +132,7 @@ async function main() {
     await fill("#customer_name", "Example Co");
     await click("#new-project-form button[type=submit]");
     await waitFor("location.pathname.endsWith('/project.html') && document.getElementById('project-name').innerText === 'UI Intranet'", "project page");
-    await waitFor("document.querySelectorAll('#phases tbody tr').length === 5", "five phases");
+    await waitFor("document.querySelectorAll('#phases tbody tr:not([data-task])').length === 5", "five phases");
     projectUrl = await evaluate("location.pathname + location.search");
     await shot("01-project-created");
   });
@@ -237,16 +243,31 @@ async function main() {
     await waitFor("document.getElementById('agent-runs').innerText.includes('Leave app brief v1')", "run listed");
     const runs = await text("#agent-runs");
     if (!/queued/i.test(runs) || !runs.includes("Waiting for the agent worker")) throw new Error(runs);
+    const clarifyRow = "document.querySelector('#phases tr[data-task=clarify_brief]')";
+    await waitFor(`${clarifyRow}?.querySelector('.badge').innerText.toLowerCase() === 'in progress'`, "clarify task in progress");
     await click("#agent-submit");
-    await waitFor("document.getElementById('agent-error').innerText.includes('already been asked')", "duplicate request notice");
+    await waitFor("document.getElementById('agent-error').innerText.includes('already done this task')", "duplicate request notice");
+    if (!(await text("#requirements-summary")).includes("Not drafted yet")) throw new Error("requirements section missing");
     await shot("06-agent-run-queued");
+  });
+
+  await step("PM uploads a Word file as a source document and its text is extracted", async () => {
+    await click("#upload-toggle");
+    await setFile("#upload-file", seed.docx);
+    await waitFor("document.getElementById('upload-title').value === 'discovery-notes'", "title from file name");
+    await fill("#upload-origin", "Emailed by the customer's HR lead");
+    await click("#upload-form button[type=submit]");
+    await waitFor("location.pathname.endsWith('/artifact.html') && document.getElementById('content').innerText.includes('Leave approvals happen weekly')", "extracted text shown");
+    const meta = await text("#version-meta");
+    if (!meta.includes("Origin: Emailed by the customer's HR lead")) throw new Error("origin missing: " + meta);
+    await shot("07-uploaded-source-document");
   });
 
   await step("project page lists the approved document and the audit page loads", async () => {
     await goto(projectUrl, "document.getElementById('documents').innerText.includes('Leave app BRD')", "documents table");
     const docs = await text("#documents");
     if (!/approved/i.test(docs)) throw new Error(docs);
-    await shot("07-project-overview");
+    await shot("08-project-overview");
     const id = projectUrl.split("id=")[1];
     await goto(`/app/control-center/audit.html?id=${id}`, "document.querySelectorAll('#events tbody tr').length > 5", "audit rows");
     const audit = await text("#events");

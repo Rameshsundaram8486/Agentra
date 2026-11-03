@@ -37,6 +37,31 @@ def runs_for_input(session: Session, agent_key: str, task_key: str, version_id: 
     )
 
 
+def succeeded_runs(session: Session, project_id: uuid.UUID, agent_key: str, task_keys: tuple[str, ...]) -> list[AgentRun]:
+    if not task_keys:
+        return []
+    return list(
+        session.scalars(
+            select(AgentRun)
+            .where(
+                AgentRun.project_id == project_id,
+                AgentRun.agent_key == agent_key,
+                AgentRun.task_key.in_(task_keys),
+                AgentRun.status == "succeeded",
+            )
+            .order_by(AgentRun.created_at)
+        )
+    )
+
+
+def unlinked_runs(session: Session, project_id: uuid.UUID) -> list[AgentRun]:
+    return list(
+        session.scalars(
+            select(AgentRun).where(AgentRun.project_id == project_id, AgentRun.task_id.is_(None)).order_by(AgentRun.created_at)
+        )
+    )
+
+
 def runs_for_project(session: Session, project_id: uuid.UUID, limit: int = 50) -> list[AgentRun]:
     return list(
         session.scalars(

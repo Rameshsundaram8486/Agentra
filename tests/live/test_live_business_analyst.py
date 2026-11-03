@@ -55,3 +55,48 @@ def test_business_analyst_asks_grounded_questions_about_a_real_brief(
     assert len(decisions) >= 3
     for decision in decisions:
         print(f"- {decision.title}: {decision.question} [{', '.join(o.key for o in decision.options)}] -> {decision.recommended_option}")
+
+
+def test_business_analyst_drafts_grounded_requirements(
+    ba_team: Team, make_brief: Callable[..., Any], run: Callable[..., Any], test_settings: Settings,
+    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore,
+) -> None:
+    """A real draft from the demo brief and synthetic discovery notes (the clarify task is closed directly)."""
+    from app.demo import DEMO_BRIEF
+    from app.modules.artifacts.service import ArtifactCreate
+    from app.modules.workflow.service import TransitionRequest
+    from tests.agent_support import DISCOVERY_NOTES
+
+    if test_settings.anthropic_api_key is None:
+        pytest.fail("ANTHROPIC_API_KEY is not set in .env")
+    provider = AnthropicProvider(test_settings.anthropic_api_key.get_secret_value())
+    runner = AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, provider))
+    team = ba_team
+    brief = make_brief(team, DEMO_BRIEF)
+    run(lambda s: s.artifacts.create_artifact(
+        team.pm.actor, team.project.id, ArtifactCreate(artifact_type="source_document", title="Discovery notes", content=DISCOVERY_NOTES)
+    ))
+    for actor, state in ((team.owner, "ready"), (team.pm, "in_progress"), (team.pm, "waiting_for_input"), (team.pm, "completed")):
+        def step(s: Any, actor: Any = actor, state: str = state) -> None:
+            phase = next(p for p in s.workflow.list_phase_runs(team.owner.actor, team.project.id) if p.phase == 7)
+            task = next(t for t in phase.tasks if t.key == "clarify_brief")
+            s.workflow.transition_task(actor.actor, task.id, TransitionRequest(to_state=state, reason="Live test", expected_version=task.version))
+        run(step)
+    data = AgentRunCreate(agent_key="business_analyst", task_key="draft_requirements", artifact_version_id=brief.id)
+    queued = run(lambda s: s.executions.request_run(team.pm.actor, team.project.id, data)).run
+
+    runner.handle(ClaimedJob(uuid.uuid4(), "agent_run", {"agent_run_id": str(queued.id)}, "live", 1))
+
+    detail = run(lambda s: s.executions.get_run(team.owner.actor, queued.id))
+    call = detail.model_calls[0]
+    print(f"\nstatus={detail.status} model={call.model} fallback={call.fallback_used} cost=${call.cost_usd} "
+          f"tokens in/out={call.input_tokens}/{call.output_tokens} cache_write={call.cache_creation_input_tokens} latency={call.latency_ms}ms")
+    for finding in detail.findings:
+        print(f"finding: {finding.severity} {finding.check} {finding.path}: {finding.message}")
+    assert detail.status == "succeeded", f"{detail.error_code}: {detail.error_message}"
+    view = run(lambda s: s.requirements.view(team.owner.actor, team.project.id))
+    print(f"counts={view.counts} set_flags={[f.message for f in view.set_flags]}")
+    for item in view.items:
+        flags = "; ".join(f.message for f in item.quality_flags)
+        print(f"- {item.item_id} [{item.label}/{item.status}] {item.title}: {item.statement}" + (f"  <{flags}>" if flags else ""))
+    assert view.counts["confirmed"] > 0 and any(item.kind == "functional" for item in view.items)

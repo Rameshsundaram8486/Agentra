@@ -39,6 +39,12 @@ def title_taken(session: Session, project_id: uuid.UUID, artifact_type: str, tit
     )
 
 
+def get_by_title(session: Session, project_id: uuid.UUID, artifact_type: str, title: str) -> Artifact | None:
+    return session.scalar(
+        select(Artifact).where(Artifact.project_id == project_id, Artifact.artifact_type == artifact_type, Artifact.title == title)
+    )
+
+
 def artifacts_for_project(session: Session, project_id: uuid.UUID, artifact_type: str | None = None) -> list[Artifact]:
     query = select(Artifact).where(Artifact.project_id == project_id)
     if artifact_type is not None:

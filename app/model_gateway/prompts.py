@@ -1,5 +1,6 @@
 """Loads versioned prompts and output schemas. The recorded version is the file name plus a content hash,
-so an edited prompt is visible in every agent run that used it, even if the file name stayed the same."""
+so an edited prompt is visible in every agent run that used it, even if the file name stayed the same.
+Line endings are normalised before hashing, so a Windows and a Linux checkout give the same version."""
 
 import hashlib
 import json
@@ -21,12 +22,13 @@ class SchemaFile:
 
 
 def _version(path: Path, raw: bytes) -> str:
-    return f"{path.stem}@{hashlib.sha256(raw).hexdigest()[:12]}"
+    normalised = raw.replace(b"\r\n", b"\n")
+    return f"{path.stem}@{hashlib.sha256(normalised).hexdigest()[:12]}"
 
 
 def load_prompt(path: Path) -> PromptFile:
     raw = path.read_bytes()
-    text = raw.decode("utf-8").strip()
+    text = raw.decode("utf-8").replace("\r\n", "\n").strip()
     if not text:
         raise ValueError(f"{path.name} is empty")
     return PromptFile(text=text, version=_version(path, raw))

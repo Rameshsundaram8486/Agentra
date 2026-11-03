@@ -1,7 +1,8 @@
 """Agent loop for one attempt of an agent run:
 
-start (preconditions re-checked) -> prepare (inputs through G1) -> model call through the gateway (reserved
-against the cap first) -> output through G4 -> apply (proposals raised as the agent) -> finish.
+start (preconditions re-checked) -> prepare (inputs through G1; missing input ends here, unpaid) -> model call
+through the gateway (reserved against the cap first) -> output through G4 and the task's own checks -> apply
+(records and proposals created as the agent) -> finish, which also moves the workflow task.
 
 Each step has its own transaction, so nothing a model produced is saved unless every guardrail passed, and
 the run always ends with a recorded status and reason. Only transient provider errors are retried (by the
@@ -18,8 +19,9 @@ from typing import Any
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.agents import task_implementation
+from app.agents.base import MissingInput
 from app.composition import Policies, Services
-from app.guardrails.findings import Finding
+from app.guardrails.findings import Finding, blocking
 from app.guardrails.output.secret_scan import redact_secrets
 from app.guardrails.pipeline import check_output
 from app.infrastructure.clock import Clock
@@ -36,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 _RAW_EXCERPT_CHARS = 20_000
 _LEASE_MARGIN = timedelta(minutes=2)
+_MIN_TOKENS_PER_SECOND = 40
 
 
 class _RunLedger:
@@ -71,9 +74,12 @@ class AgentRunner:
 
     @property
     def lease(self) -> timedelta:
-        """Long enough for the slowest model call including SDK retries, so a busy job is not reclaimed."""
-        profiles = [self._gateway.config.profile(key) for key in self._policies.agents.agents]
-        longest = max((p.timeout_seconds * (p.max_retries + 1) for p in profiles), default=300)
+        """Long enough for the slowest model call including SDK retries, so a busy job is not reclaimed.
+        The timeout is per read, and a long answer streams for a while, so output length counts too."""
+        profiles = [self._gateway.config.profile(agent, task) for agent, task in self._policies.agents.tasks]
+        longest = max(
+            ((p.timeout_seconds + p.max_tokens / _MIN_TOKENS_PER_SECOND) * (p.max_retries + 1) for p in profiles), default=300
+        )
         return timedelta(seconds=longest) + _LEASE_MARGIN
 
     @contextmanager
@@ -91,6 +97,7 @@ class AgentRunner:
         message: str,
         findings: list[Finding] | None = None,
         output: dict[str, Any] | None = None,
+        task_state: str | None = None,
     ) -> None:
         with self._transaction() as services:
             services.executions.finish_run(
@@ -100,6 +107,7 @@ class AgentRunner:
                 error_message=message,
                 findings=[finding.to_dict() for finding in findings or []],
                 output=output,
+                task_state=task_state,
             )
         logger.info("agent run ended", extra={"agent_run_id": str(run_id), "status": status, "error_code": code})
 
@@ -129,6 +137,9 @@ class AgentRunner:
         try:
             with self._transaction() as services:
                 prepared = task.prepare(services, started, definition)
+        except MissingInput as exc:
+            self._finish(run_id, "blocked", "missing_input", str(exc), task_state="waiting_for_input")
+            return
         except DomainError as exc:
             self._finish(run_id, "failed", "input_rejected", str(exc))
             return
@@ -136,6 +147,7 @@ class AgentRunner:
         try:
             result = self._gateway.call(
                 started.agent_key,
+                task_key=started.task_key,
                 system=definition.prompt.text,
                 user=prepared.user,
                 output_schema=definition.schema_file.schema,
@@ -167,10 +179,11 @@ class AgentRunner:
             self._finish(run_id, "failed", "truncated", "The answer hit the token limit and was incomplete; nothing was saved.", prepared.input_findings)
             return
 
-        check = check_output(response.text, task.output_model, source_text=prepared.source_text, source_name=prepared.source_name)
-        findings = prepared.input_findings + check.findings
-        if check.blocked or check.value is None:
-            blocked = sum(1 for finding in check.findings if finding.severity == "block")
+        check = check_output(response.text, task.output_model, sources=prepared.sources)
+        output_findings = check.findings + (task.check(check.value, prepared) if check.value is not None else [])
+        findings = prepared.input_findings + output_findings
+        if check.value is None or blocking(output_findings):
+            blocked = len(blocking(output_findings))
             self._finish(
                 run_id,
                 "failed",
@@ -183,17 +196,22 @@ class AgentRunner:
 
         try:
             with self._transaction() as services:
-                decision_ids = task.apply(services, started, check.value)
+                applied = task.apply(services, started, check.value, prepared)
                 services.executions.finish_run(
                     run_id,
                     status="succeeded",
-                    output={"result": check.value.model_dump(mode="json"), "decision_ids": [str(i) for i in decision_ids]},
+                    output={
+                        "result": check.value.model_dump(mode="json"),
+                        "decision_ids": [str(i) for i in applied.decision_ids],
+                        **applied.records,
+                    },
                     findings=[finding.to_dict() for finding in findings],
+                    task_state=applied.task_state,
                 )
         except DomainError as exc:
             self._finish(run_id, "failed", "apply_failed", f"The output passed its checks but could not be saved: {exc}", findings)
             return
         logger.info(
             "agent run succeeded",
-            extra={"agent_run_id": str(run_id), "decisions": len(decision_ids), "cost_usd": str(result.cost_usd), "model": response.model},
+            extra={"agent_run_id": str(run_id), "decisions": len(applied.decision_ids), "cost_usd": str(result.cost_usd), "model": response.model},
         )

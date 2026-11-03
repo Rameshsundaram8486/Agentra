@@ -21,12 +21,15 @@ from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa: F401  (registers every table)
 from app.composition import Policies, Services, load_policies
+from app.harness.runner import AgentRunner
 from app.infrastructure.clock import FixedClock
 from app.infrastructure.db import create_db_engine, make_session_factory
 from app.infrastructure.settings import ENV_FILE, Settings
 from app.infrastructure.unit_of_work import UnitOfWork
 from app.infrastructure.storage.local import LocalArtifactStore
 from app.main import create_app
+from app.model_gateway.gateway import ModelGateway
+from app.model_gateway.providers.fake import FakeProvider
 from app.modules.artifacts.service import ArtifactCreate
 from app.modules.decisions.service import ApprovalCreate
 from app.modules.identity.service import SYSTEM_ACTOR, Actor
@@ -250,6 +253,26 @@ def move_phase(run: Callable[..., Any]) -> Callable[..., None]:
 
 
 @pytest.fixture
+def close_tasks(run: Callable[..., Any]) -> Callable[..., None]:
+    """close_tasks(team, phase) cancels the phase's open tasks as the owner, for tests about phase gates."""
+
+    def _close(team: Team, phase: int, *, policies: Policies | None = None) -> None:
+        kwargs = {"policies": policies} if policies else {}
+
+        def _step(s: Services) -> None:
+            current = next(p for p in s.workflow.list_phase_runs(team.owner.actor, team.project.id) if p.phase == phase)
+            for task in current.tasks:
+                if task.state not in ("completed", "cancelled"):
+                    s.workflow.transition_task(
+                        team.owner.actor, task.id, TransitionRequest(to_state="cancelled", reason="Not part of this test", expected_version=task.version)
+                    )
+
+        run(_step, **kwargs)
+
+    return _close
+
+
+@pytest.fixture
 def ba_team(team: Team, ba_agent: TestUser, add_member: Callable[..., None], move_phase: Callable[..., None]) -> Team:
     """A team whose project has the Business Analyst agent on it and Phase 7 in progress."""
     add_member(team.owner, team.project.id, ba_agent, "agent")
@@ -272,6 +295,24 @@ def make_brief(run: Callable[..., Any]) -> Callable[..., Any]:
         return artifact.current_version
 
     return _make
+
+
+@pytest.fixture
+def model() -> FakeProvider:
+    """The scripted model every agent test uses; add responses with model.add(...)."""
+    return FakeProvider()
+
+
+@pytest.fixture
+def runner_for(
+    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore, model: FakeProvider
+) -> Callable[..., AgentRunner]:
+    """runner_for(policies=...) builds the agent runner on the fake model."""
+
+    def _runner(policies: Policies = policies) -> AgentRunner:
+        return AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, model))
+
+    return _runner
 
 
 @pytest.fixture

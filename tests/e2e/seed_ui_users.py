@@ -6,8 +6,10 @@ import io
 import json
 import sys
 import uuid
+from pathlib import Path
 
 from app.cli import main
+from tests.support import make_docx
 
 suffix = uuid.uuid4().hex[:6]
 password = "ui-test-pass-123"
@@ -25,5 +27,11 @@ AGENT_EMAIL = "business_analyst@agents.agentra.local"
 with contextlib.redirect_stderr(io.StringIO()):  # "already exists" is fine: the account is shared by every run
     main(["create-agent", "--key", "business_analyst", "--name", "Business Analyst Agent"])
 
+docx_path = Path(sys.argv[1]).with_name("discovery-notes.docx")
+docx_path.write_bytes(make_docx("Discovery notes", "Leave approvals happen weekly."))
+
 with open(sys.argv[1], "w", encoding="utf-8") as handle:
-    json.dump({"suffix": suffix, "password": password, "users": {k: v[0] for k, v in users.items()}, "agent": AGENT_EMAIL}, handle)
+    json.dump(
+        {"suffix": suffix, "password": password, "users": {k: v[0] for k, v in users.items()}, "agent": AGENT_EMAIL, "docx": str(docx_path)},
+        handle,
+    )

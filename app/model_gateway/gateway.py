@@ -75,6 +75,7 @@ class ModelGateway:
         self,
         agent_key: str,
         *,
+        task_key: str | None = None,
         system: str,
         user: str,
         output_schema: dict[str, Any] | None,
@@ -84,7 +85,7 @@ class ModelGateway:
     ) -> ModelResult:
         """Raises BudgetExceededError before calling, or ModelProviderError when no response came back.
         Refusals and truncation are results, not exceptions: the caller decides what they mean."""
-        profile = self.config.profile(agent_key)
+        profile = self.config.profile(agent_key, task_key)
         call_id = ledger.reserve(
             CallIntent(
                 agent_key=agent_key,

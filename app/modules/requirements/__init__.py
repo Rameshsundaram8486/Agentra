@@ -1,4 +1,2 @@
-"""Phase 7: requirements, user stories, acceptance criteria, open questions and change requests.
-
-Scaffold only: not implemented yet.
-"""
+"""Phase 7: requirement items with stable IDs, labels, sources and quality checks. Change requests and
+traceability arrive in Increment 3b."""

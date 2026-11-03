@@ -68,7 +68,8 @@ def test_approval_rules_over_http(client_for: ClientFor, team: Team) -> None:
     assert bad_decision.status_code == 422
 
 
-def test_phase_completion_is_blocked_until_approved_over_http(client_for: ClientFor, team: Team) -> None:
+def test_phase_completion_is_blocked_until_approved_over_http(client_for: ClientFor, team: Team, close_tasks: Callable[..., None]) -> None:
+    close_tasks(team, 7)
     owner, pm, reviewer = client_for(team.owner), client_for(team.pm), client_for(team.reviewer)
     phase = next(p for p in owner.get(f"/api/projects/{team.project.id}/phases").json() if p["phase"] == 7)
 

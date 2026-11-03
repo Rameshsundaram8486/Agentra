@@ -1,10 +1,11 @@
+import dataclasses
 from collections.abc import Callable
 from typing import Any
 
 import pytest
 
 from app.composition import Policies
-from app.modules.errors import InvalidTransitionError
+from app.modules.errors import InvalidTransitionError, PermissionDeniedError
 from app.modules.workflow.definitions import TaskDefinition
 from app.modules.workflow.service import PhaseRunView, TaskView, TransitionRequest
 from tests.support import Team, TestUser, with_phase_tasks
@@ -23,8 +24,13 @@ def task_policies(policies: Policies) -> Policies:
 
 
 @pytest.fixture
-def task_team(make_team: Callable[..., Team], task_policies: Policies) -> Team:
-    return make_team(policies=task_policies)
+def task_team(
+    make_team: Callable[..., Team], task_policies: Policies, ba_agent: TestUser, add_member: Callable[..., None]
+) -> Team:
+    """The team's agent is the business_analyst account, which these tasks are assigned to."""
+    team = make_team(policies=task_policies)
+    add_member(team.owner, team.project.id, ba_agent, "agent")
+    return dataclasses.replace(team, agent=ba_agent)
 
 
 @pytest.fixture
@@ -111,3 +117,16 @@ def test_tasks_cannot_start_once_the_phase_has_moved_to_review(run_tasks: Run, t
 
     with pytest.raises(InvalidTransitionError, match="it is 'waiting_for_review'"):
         _move_task(run_tasks, task_team.agent, task, "in_progress")
+
+
+def test_an_agent_may_only_move_tasks_assigned_to_it(
+    run_tasks: Run, task_team: Team, make_user: Callable[..., TestUser], add_member: Callable[..., None]
+) -> None:
+    other_agent = make_user("agent")
+    add_member(task_team.owner, task_team.project.id, other_agent, "agent")
+    _start_phase(run_tasks, task_team)
+    task = _move_task(run_tasks, task_team.owner, _task(run_tasks, task_team, "gather_sources"), "ready")
+
+    with pytest.raises(PermissionDeniedError, match="only move tasks assigned to it"):
+        _move_task(run_tasks, other_agent, task, "in_progress")
+    assert _move_task(run_tasks, task_team.agent, task, "in_progress").state == "in_progress"

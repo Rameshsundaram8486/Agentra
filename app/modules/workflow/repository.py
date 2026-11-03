@@ -64,6 +64,6 @@ def transitions_for(session: Session, entity_type: str, entity_id: uuid.UUID) ->
         session.scalars(
             select(StateTransition)
             .where(StateTransition.entity_type == entity_type, StateTransition.entity_id == entity_id)
-            .order_by(StateTransition.occurred_at)
+            .order_by(StateTransition.occurred_at, StateTransition.seq)
         )
     )

@@ -25,8 +25,11 @@ class TaskSpec(_Strict):
     title: str
     description: str
     phase: int
+    workflow_task: str  # the phase task this agent task works on (config/workflows/phase_*.yaml)
     phase_states: tuple[str, ...] = Field(min_length=1)
-    input_artifact_types: tuple[str, ...] = Field(min_length=1)
+    input_artifact_types: tuple[str, ...] = Field(min_length=1)  # the main input, chosen by the person asking
+    context_artifact_types: tuple[str, ...] = ()  # every current document of these types is included too
+    context_decisions_from: tuple[str, ...] = ()  # decisions raised by this agent's earlier runs of these tasks
     prompt: str
     output_schema: str
     max_attempts: int = Field(ge=1, le=5)

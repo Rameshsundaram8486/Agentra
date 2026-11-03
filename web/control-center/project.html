@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Control Center - Project workspace: phases, state transitions, documents, agent runs, decisions, members. -->
+<!-- Control Center - Project workspace: phases and tasks, documents and uploads, requirements, agent runs, decisions, members. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -38,7 +38,44 @@
         <section class="section">
           <div class="section-header">
             <h2>Documents</h2>
-            <button id="new-document-toggle" class="button button-secondary button-small" type="button" hidden>New document</button>
+            <div class="actions">
+              <button id="upload-toggle" class="button button-secondary button-small" type="button" hidden>Upload file</button>
+              <button id="new-document-toggle" class="button button-secondary button-small" type="button" hidden>New document</button>
+            </div>
+          </div>
+          <div class="card" id="upload" hidden>
+            <form id="upload-form" class="form">
+              <h3>Upload a file</h3>
+              <p class="muted small">Plain text, Markdown, Word (.docx) or PDF, up to 10 MB. The text is extracted and stored as a
+                document version; the original file is kept by its hash. Scanned PDFs without a text layer are not supported.</p>
+              <div class="field">
+                <label for="upload-file">File</label>
+                <input id="upload-file" name="file" type="file" accept=".txt,.md,.markdown,.docx,.pdf" required>
+              </div>
+              <div class="form-row">
+                <div class="field">
+                  <label for="upload-type">Type</label>
+                  <select id="upload-type" name="artifact_type">
+                    <option value="source_document">Source document</option>
+                    <option value="project_brief">Project brief</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="upload-title">Title</label>
+                  <input id="upload-title" name="title" required maxlength="200">
+                  <span class="hint">An existing title of the same type gets a new version.</span>
+                </div>
+              </div>
+              <div class="field">
+                <label for="upload-origin">Where it came from</label>
+                <input id="upload-origin" name="origin" required minlength="3" maxlength="500" placeholder="e.g. Emailed by the customer's HR lead on 2 Nov">
+              </div>
+              <div id="upload-error" class="alert alert-error" role="alert" hidden></div>
+              <div class="actions">
+                <button class="button" type="submit" id="upload-submit">Upload</button>
+                <button id="upload-cancel" class="button button-secondary" type="button">Cancel</button>
+              </div>
+            </form>
           </div>
           <div class="card" id="new-document" hidden>
             <form id="new-document-form" class="form">
@@ -70,6 +107,15 @@
           </div>
           <div class="card card-flush" id="documents"><p class="empty">Loading...</p></div>
         </section>
+
+        <section class="section" id="requirements-section" hidden>
+          <div class="section-header">
+            <h2>Requirements</h2>
+            <span class="muted small">IDs and statuses are set by Agentra, not by the agent.</span>
+          </div>
+          <div class="card" id="requirements-summary"></div>
+          <div class="card card-flush" id="requirements"></div>
+        </section>
       </div>
 
       <div class="section">
@@ -80,10 +126,18 @@
           <div class="card">
             <form id="agent-form" class="form" hidden>
               <p class="muted small">
-                The agent reads a project brief and puts questions in the decision inbox: the technology stack,
-                the delivery approach and anything the brief leaves unclear. It recommends; people decide.
+                First the agent reads the brief and asks about the technology stack, the delivery approach and
+                anything unclear. Once those questions are dealt with and the Clarify task is closed, it drafts the
+                requirements from the brief, the source documents and your answers. It recommends; people decide.
                 Each run is a paid model call.
               </p>
+              <div class="field">
+                <label for="agent-task">Task</label>
+                <select id="agent-task" name="task_key">
+                  <option value="clarify_brief">Ask about the brief</option>
+                  <option value="draft_requirements">Draft the requirements</option>
+                </select>
+              </div>
               <div class="field">
                 <label for="agent-brief">Project brief</label>
                 <select id="agent-brief" name="artifact_version_id"></select>

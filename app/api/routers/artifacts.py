@@ -10,6 +10,7 @@ from app.modules.artifacts.service import (
     ArtifactCreate,
     ArtifactDetail,
     ArtifactView,
+    UploadCreate,
     VersionContent,
     VersionCreate,
     VersionDiff,
@@ -54,6 +55,16 @@ def list_artifacts(project_id: uuid.UUID, actor: ActorDep, services: ServicesDep
     artifacts = services.artifacts.list_artifacts(actor, project_id)
     statuses = services.decisions.approval_statuses(a.current_version.id for a in artifacts)
     return [ArtifactSummary(**a.model_dump(), approval_status=statuses[a.current_version.id]) for a in artifacts]
+
+
+@router.post("/projects/{project_id}/artifacts/upload", status_code=status.HTTP_201_CREATED)
+def upload_artifact(
+    project_id: uuid.UUID, body: UploadCreate, actor: ActorDep, uow: UnitOfWorkDep, services: ServicesDep
+) -> ArtifactDetail:
+    """A .txt, .md, .docx or .pdf file (base64). Its text becomes a new document, or a new version of one with the same title."""
+    artifact = services.artifacts.upload(actor, project_id, body)
+    uow.commit()
+    return artifact
 
 
 @router.post("/projects/{project_id}/artifacts", status_code=status.HTTP_201_CREATED)
