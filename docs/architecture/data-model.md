@@ -1,6 +1,6 @@
 # Data model
 
-PostgreSQL tables as of migration `0003`. Each table belongs to one module. Other modules use that module's `service.py` and never query its tables. Foreign keys across modules exist only for referential integrity.
+PostgreSQL tables as of migration `0004`. Each table belongs to one module. Other modules use that module's `service.py` and never query its tables. Foreign keys across modules exist only for referential integrity.
 
 ```mermaid
 erDiagram
@@ -19,6 +19,9 @@ erDiagram
   projects ||--o{ decision_requests : "raises"
   decision_requests ||--o{ decision_outcomes : "answered by"
   artifact_versions |o--o{ decision_requests : "may concern"
+  projects ||--o{ agent_runs : "has"
+  artifact_versions ||--o{ agent_runs : "input of"
+  agent_runs ||--o{ model_calls : "made"
 ```
 
 | Table | Module | Purpose | Key rules |
@@ -36,6 +39,8 @@ erDiagram
 | `approvals` | decisions | Approve, reject or request changes | Bound to `artifact_version_id` plus `content_sha256`, and only for the current version. Only people with a role listed for the type, and (for independent review) never an author of any version. **Append-only**; the latest by `seq` counts. |
 | `decision_requests` | decisions | A question, its options and the recommendation | Never edited after it is raised, so the AI's recommendation is always preserved. **Append-only**. |
 | `decision_outcomes` | decisions | Each human response: accept, select an option, other, modify, reject or defer | Numbered per request, with a unique `(request, outcome_no)` so concurrent answers cannot both win. A final outcome closes the request. **Append-only**. |
+| `agent_runs` | executions | One request for an agent task on one document version | `queued`, `running`, then `succeeded`, `failed` or `blocked`, with error code, message and guardrail findings. Unique `idempotency_key` per (agent, task, version, attempt number): asking again returns the active run. Records the agent, prompt and schema versions, cost and the ids of the decisions it raised. |
+| `model_calls` | executions | Every model call, and the spend ledger for the monthly cap | Written as `pending` at its worst-case cost **before** the call and committed, then settled with real tokens, cost, the model that answered, fallback use, stop reason, refusal category, latency and request id. Pending or abandoned calls keep counting at their reserve. Budget checks take an advisory lock. |
 | `jobs` | infrastructure | Background job queue | One job per `idempotency_key`. Claimed with `FOR UPDATE SKIP LOCKED` under a lease; reclaimed when the lease expires; `dead` after `max_attempts`. |
 | `outbox_messages` | infrastructure | External side effects | Written in the same transaction as the change that causes them. Delivered at least once, and handlers receive the idempotency key. |
 
@@ -52,5 +57,5 @@ erDiagram
 
 ## Planned additions
 
-- Increment 2: agent runs and incidents.
+- Increment 2 (rest): incidents and RCA records, evals, tool calls.
 - Increment 3: requirement items, traceability, change requests against an approved baseline.

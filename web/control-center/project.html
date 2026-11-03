@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Control Center - Project workspace: phases, state transitions, documents, decisions, members. -->
+<!-- Control Center - Project workspace: phases, state transitions, documents, agent runs, decisions, members. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -73,6 +73,31 @@
       </div>
 
       <div class="section">
+        <section class="section" id="agent-section" hidden>
+          <div class="section-header">
+            <h2>Business Analyst agent</h2>
+          </div>
+          <div class="card">
+            <form id="agent-form" class="form" hidden>
+              <p class="muted small">
+                The agent reads a project brief and puts questions in the decision inbox: the technology stack,
+                the delivery approach and anything the brief leaves unclear. It recommends; people decide.
+                Each run is a paid model call.
+              </p>
+              <div class="field">
+                <label for="agent-brief">Project brief</label>
+                <select id="agent-brief" name="artifact_version_id"></select>
+              </div>
+              <div id="agent-error" class="alert alert-error" role="alert" hidden></div>
+              <div class="actions">
+                <button class="button" type="submit" id="agent-submit">Ask the Business Analyst agent</button>
+              </div>
+            </form>
+            <p id="agent-no-brief" class="muted small" hidden>Add a document of type Project brief first; the agent works from it.</p>
+            <ul class="list" id="agent-runs"></ul>
+          </div>
+        </section>
+
         <section class="section">
           <h2>Decisions</h2>
           <div class="card" id="decision-summary"><p class="muted">Loading...</p></div>

@@ -172,6 +172,17 @@ class IdentityService:
             raise NotFoundError("User not found")
         return _to_actor(user)
 
+    def actor_by_email(self, email: str) -> Actor:
+        """For admin tooling (CLI); API requests always get their actor from the session."""
+        user = repository.get_user_by_email(self._session, _normalise_email(email))
+        if user is None or not user.is_active:
+            raise NotFoundError(f"No active user {email}")
+        return _to_actor(user)
+
+    def agent_by_key(self, agent_key: str) -> Actor | None:
+        user = self._session.scalar(select(User).where(User.agent_key == agent_key, User.is_active.is_(True)))
+        return _to_actor(user) if user else None
+
     def display_names(self, user_ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
         if not user_ids:
             return {}

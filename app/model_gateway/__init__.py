@@ -1,4 +1,1 @@
-"""Provider-neutral model gateway.
-
-Scaffold only: not implemented yet.
-"""
+"""Model gateway: the only way agent code reaches a model. See gateway.py."""

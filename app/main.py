@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import __version__
 from app.api.errors import register_error_handlers
-from app.api.routers import artifacts, audit, auth, decisions, health, projects, workflow
+from app.api.routers import artifacts, audit, auth, decisions, executions, health, projects, workflow
 from app.composition import Policies, load_policies
 from app.infrastructure.clock import Clock, SystemClock
 from app.infrastructure.db import create_db_engine, make_session_factory
@@ -80,6 +80,7 @@ def create_app(
         workflow.router,
         artifacts.router,
         decisions.router,
+        executions.router,
         audit.router,
     ):
         app.include_router(router)

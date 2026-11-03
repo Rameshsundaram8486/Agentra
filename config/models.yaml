@@ -1,2 +1,32 @@
-# Model routing: provider anthropic, model claude-opus-5-5, effort per agent, refusal fallback.
-# Scaffold only: not implemented yet.
+# Model routing for every agent call. All calls go through app/model_gateway; nothing else talks to a provider.
+#
+# defaults apply to every agent; agents.<key> overrides them for one agent.
+# effort: low | medium | high | xhigh | max. claude-opus-5-5 always thinks, so effort is the only depth control,
+#   and it defaults to medium if not sent, so the gateway always sends it.
+# refusal_fallback: when the model declines on policy grounds, the API re-runs the request on Anthropic's
+#   recommended fallback model (fallbacks: "default"); the run records which model actually answered.
+# budget.monthly_usd: a new call is refused when this calendar month's spend (UTC) plus the call's worst-case
+#   cost would exceed it. Calls that were started but never settled keep counting at their worst case.
+# pricing_usd_per_mtok: list prices used for the cap and per-run cost. Check them when models change.
+#   A model not listed here (for example a fallback model) is costed at the highest listed rate.
+version: 1
+provider: anthropic
+
+defaults:
+  model: claude-opus-5-5
+  effort: medium
+  max_tokens: 16000
+  timeout_seconds: 240
+  max_retries: 2
+  refusal_fallback: true
+
+agents:
+  business_analyst:
+    effort: high
+    max_tokens: 24000
+
+budget:
+  monthly_usd: 50
+
+pricing_usd_per_mtok:
+  claude-opus-5-5: {input: 4.00, output: 20.00, cache_write: 5.00, cache_read: 0.20}

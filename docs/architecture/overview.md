@@ -26,6 +26,7 @@ Browser (web/control-center, plain HTML/JS)
 | `decisions` | approvals, decision requests and outcomes; rules from `config/policies/approval_matrix.yaml` | audit, identity, artifacts |
 | `workflow` | phase runs, tasks, state transitions; lifecycles from `config/workflows/` | audit, identity, decisions (approval gate) |
 | `projects` | projects | audit, identity, workflow |
+| `executions` | agent runs, model calls (the spend ledger) | audit, identity, artifacts, workflow |
 
 ## Approvals and decisions
 
@@ -34,6 +35,29 @@ Browser (web/control-center, plain HTML/JS)
 - **Authors can't approve their own work.** With `independent_review: true`, nobody who authored any version of an artifact can approve it.
 - **Phase completion needs approvals.** Each phase file lists `exit.required_approvals`. Completing the phase needs every artifact of those types approved at its current version. Adding a new version voids the earlier approval.
 - **Recommendations are preserved.** A decision request stores the recommendation exactly as raised. Each human response (accept, choose another option, something else, modify, reject, defer) is a separate numbered outcome.
+
+## Agent runs
+
+```
+Person clicks "Ask the Business Analyst agent"
+  -> executions.request_run        permission agent.run; phase state and agent membership checked;
+                                   run + job created in one transaction (same version twice -> same run)
+Worker (app/workers/workflow_worker.py) claims the job
+  -> harness/runner.py             preconditions checked again
+  -> agent task prepare            reads the brief through the agent's own permissions;
+                                   G1: secrets redacted, injection flagged, brief wrapped as data
+  -> model_gateway.call            reserves the worst-case cost against the monthly cap (committed),
+                                   calls Claude, settles real usage, cost and the model that answered
+  -> guardrails G4                 schema; every source quote must appear in the brief;
+                                   no approval/decision/test/deploy claims; no secrets
+  -> agent task apply              decision requests raised as the agent account, linked to the brief version
+  -> run finished                  succeeded / failed / blocked, with findings and reason; audited
+```
+
+- **Nothing a model writes is saved unless every output check passed.** A blocked output is kept only as a redacted excerpt on the run, for diagnosis.
+- **Agents propose; people decide.** The agent's questions arrive as open decision requests. Agents cannot record outcomes or approvals.
+- **Retries:** only transient provider errors are retried, by the job queue up to the task's `max_attempts`. Refusals, guardrail failures and the budget are final. Asking again after a failed run starts a new run.
+- **Model routing and spend:** `config/models.yaml` (model, effort, token limit and timeout per agent, prices, monthly cap). Agent definitions, prompts and output schemas: `config/agents/<key>/`. A prompt's version is its file name plus a content hash, recorded on every call.
 
 ## Authorisation
 
@@ -44,7 +68,7 @@ Browser (web/control-center, plain HTML/JS)
 
 ## Configuration as data
 
-`config/workflows/` and `config/policies/` are loaded and validated when the app starts. An invalid file stops startup rather than failing later at runtime.
+`config/workflows/`, `config/policies/`, `config/agents/` and `config/models.yaml` are loaded and validated when the app starts, including cross-references (an agent task's document types, phase and phase states must exist). An invalid file stops startup rather than failing later at runtime.
 
 ## Security headers
 

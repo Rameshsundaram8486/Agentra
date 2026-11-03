@@ -1,2 +1,25 @@
-# Business Analyst Agent: requirements, acceptance criteria, traceability (Phase 7; consulted 8, 10, 11). Defines: mission, phases, tools, permissions, risk class, autonomy level, effort, escalation, completion criteria.
-# Scaffold only: not implemented yet.
+# Business Analyst Agent: requirements, acceptance criteria, traceability (Phase 7; consulted 8, 10, 11).
+# Loaded by app/harness/registry.py; the code for each task is in app/agents/business_analyst/.
+# Model, effort and token limits are in config/models.yaml. Agents draft and ask; people decide and approve.
+version: 1
+key: business_analyst
+name: Business Analyst Agent
+mission: >
+  Turn project inputs into clear, testable requirements, and ask the people on the project wherever the
+  inputs are missing, ambiguous or need a decision.
+phases: [7]
+autonomy: supervised   # every output is a proposal or a question for a person
+risk_class: low        # reads project documents and raises decisions; no external actions
+
+tasks:
+  clarify_brief:
+    title: Ask about the project brief
+    description: >
+      Reads a project brief and asks the project team to decide the technology stack and delivery approach,
+      and to answer questions about gaps or ambiguities in the brief.
+    phase: 7
+    phase_states: [in_progress, waiting_for_input]
+    input_artifact_types: [project_brief]
+    prompt: prompts/clarify_brief.v1.md
+    output_schema: schemas/clarify_brief.v1.json
+    max_attempts: 2

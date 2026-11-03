@@ -2,7 +2,7 @@
 
 AI-native operating platform for an IT services company. Specialised agents do bounded work, a workflow engine owns state, and humans approve consequential decisions against exact artifact versions.
 
-> **Status: Increment 1b (artifacts, decisions, approvals) done.** Working so far:
+> **Status: Increment 1b done, plus the first slice of Increment 2: the Business Analyst agent asks about a project brief.** Working so far:
 > - sign-in with server sessions
 > - projects and role-based memberships
 > - a workflow engine driven by YAML lifecycles, with entry and exit gates, optimistic locking and a record of every transition
@@ -13,6 +13,10 @@ AI-native operating platform for an IT services company. Specialised agents do b
 > - decision records that keep the original recommendation
 > - phase completion gated on approvals
 > - the Control Center pages for projects, documents, decisions and the audit trail
+> - a model gateway to the Claude API (claude-opus-5-5, effort per agent, refusal fallback, cost per call, a monthly spending cap)
+> - guardrails in code around every agent run: secrets redacted and the brief wrapped as data before the call; schema, grounded quotes, no approval claims and no secrets after it
+> - the Business Analyst agent: reads a project brief and raises the technology stack, the delivery approach and clarifying questions as decisions for people to answer
+> - a background worker for agent runs, and a record of every run and model call
 >
 > Everything else is still scaffold: those files carry a one-line purpose header and say "Scaffold only". See [docs/architecture/overview.md](docs/architecture/overview.md).
 

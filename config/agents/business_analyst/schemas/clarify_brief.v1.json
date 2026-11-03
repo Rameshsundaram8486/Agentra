@@ -1,0 +1,97 @@
+{
+  "$comment": "Output of business_analyst.clarify_brief. Sent to the model as the structured output format; size limits and cross-field rules are enforced in code (app/agents/business_analyst/agent.py).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["brief_summary", "technology_stack", "delivery_approach", "clarifying_questions"],
+  "properties": {
+    "brief_summary": {
+      "type": "string",
+      "description": "What the brief says, in a few sentences. Facts from the brief only."
+    },
+    "technology_stack": {"$ref": "#/$defs/decision"},
+    "delivery_approach": {"$ref": "#/$defs/decision"},
+    "clarifying_questions": {
+      "type": "array",
+      "description": "Three to eight questions about missing, ambiguous or contradictory information.",
+      "items": {"$ref": "#/$defs/question"}
+    }
+  },
+  "$defs": {
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "title", "description", "pros", "cons"],
+      "properties": {
+        "key": {"type": "string", "description": "Short lower_snake_case identifier, unique within the decision."},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "pros": {"type": "array", "items": {"type": "string"}},
+        "cons": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title", "question", "context", "options", "recommended_option",
+        "recommendation_rationale", "assumptions", "risks", "source_quotes"
+      ],
+      "properties": {
+        "title": {"type": "string"},
+        "question": {"type": "string", "description": "The question the people on the project are asked to decide."},
+        "context": {"type": "string", "description": "What in the brief makes this decision necessary; facts and assumptions labelled."},
+        "options": {"type": "array", "description": "Two to four options.", "items": {"$ref": "#/$defs/option"}},
+        "recommended_option": {"type": "string", "description": "Key of the recommended option."},
+        "recommendation_rationale": {"type": "string"},
+        "assumptions": {"type": "array", "items": {"type": "string"}},
+        "risks": {"type": "array", "items": {"type": "string"}},
+        "source_quotes": {
+          "type": "array",
+          "description": "One to three passages copied exactly from the brief.",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "title", "description"],
+      "properties": {
+        "key": {"type": "string", "description": "Short lower_snake_case identifier, unique within the question."},
+        "title": {"type": "string"},
+        "description": {"type": "string"}
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "category", "title", "question", "why_it_matters", "suggested_answers",
+        "recommended_answer", "recommendation_rationale", "source_quotes"
+      ],
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "scope", "users_and_roles", "business_rules", "integrations", "data",
+            "non_functional", "constraints", "technology", "delivery", "other"
+          ]
+        },
+        "title": {"type": "string"},
+        "question": {"type": "string"},
+        "why_it_matters": {"type": "string"},
+        "suggested_answers": {"type": "array", "description": "Two to four suggested answers.", "items": {"$ref": "#/$defs/answer"}},
+        "recommended_answer": {
+          "anyOf": [{"type": "string"}, {"type": "null"}],
+          "description": "Key of the recommended answer, or null when there is no real reason to recommend one."
+        },
+        "recommendation_rationale": {"type": "string", "description": "Why the recommended answer; empty when recommended_answer is null."},
+        "source_quotes": {
+          "type": "array",
+          "description": "One to three passages copied exactly from the brief.",
+          "items": {"type": "string"}
+        }
+      }
+    }
+  }
+}

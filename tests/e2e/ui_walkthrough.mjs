@@ -136,12 +136,12 @@ async function main() {
     if (!phases.includes("Needs approved: Requirements baseline")) throw new Error(phases);
   });
 
-  await step("admin adds the PM and reviewer by email", async () => {
-    for (const [who, role] of [["pm", "project_manager"], ["reviewer", "reviewer"]]) {
-      await fill("#member-email", seed.users[who]);
+  await step("admin adds the PM, the reviewer and the Business Analyst agent by email", async () => {
+    for (const [email, role] of [[seed.users.pm, "project_manager"], [seed.users.reviewer, "reviewer"], [seed.agent, "agent"]]) {
+      await fill("#member-email", email);
       await fill("#member-role", role);
       await click("#add-member-form button[type=submit]");
-      await waitFor(`document.getElementById('members').innerText.includes(${js(seed.users[who])})`, `${who} listed`);
+      await waitFor(`document.getElementById('members').innerText.includes(${js(email)})`, `${email} listed`);
     }
   });
 
@@ -214,15 +214,43 @@ async function main() {
     await shot("05-decision-decided");
   });
 
+  await step("PM starts Phase 7, adds a project brief and asks the Business Analyst agent", async () => {
+    await login("pm");
+    await goto(projectUrl, "!document.getElementById('agent-section').hidden", "agent panel");
+    if (!(await text("#agent-section")).includes("Add a document of type Project brief first")) throw new Error("no-brief hint missing");
+    const phase7 = "[...document.querySelectorAll('#phases tbody tr')].find((row) => row.cells[0].innerText.trim() === '7')";
+    for (const state of ["ready", "in progress"]) {
+      await evaluate(`([...${phase7}.querySelectorAll('button')].find((b) => b.innerText.trim().toLowerCase() === ${js(state)}).click(), true)`);
+      await waitFor("document.getElementById('transition-dialog').open", "transition dialog");
+      await fill("#transition-reason", "Starting business analysis");
+      await click("#transition-form button[type=submit]");
+      await waitFor(`!document.getElementById('transition-dialog').open && ${phase7}.querySelector('.badge').innerText.toLowerCase() === ${js(state)}`, `phase 7 ${state}`);
+    }
+    await click("#new-document-toggle");
+    await fill("#doc-type", "project_brief");
+    await fill("#doc-title", "Leave app brief");
+    await fill("#doc-content", "# Leave app brief\n\nStaff request leave online and managers approve it. The company uses Microsoft 365.\n");
+    await click("#new-document-form button[type=submit]");
+    await waitFor("location.pathname.endsWith('/artifact.html')", "brief saved");
+    await goto(projectUrl, "!document.getElementById('agent-form').hidden", "agent form");
+    await click("#agent-submit");
+    await waitFor("document.getElementById('agent-runs').innerText.includes('Leave app brief v1')", "run listed");
+    const runs = await text("#agent-runs");
+    if (!/queued/i.test(runs) || !runs.includes("Waiting for the agent worker")) throw new Error(runs);
+    await click("#agent-submit");
+    await waitFor("document.getElementById('agent-error').innerText.includes('already been asked')", "duplicate request notice");
+    await shot("06-agent-run-queued");
+  });
+
   await step("project page lists the approved document and the audit page loads", async () => {
     await goto(projectUrl, "document.getElementById('documents').innerText.includes('Leave app BRD')", "documents table");
     const docs = await text("#documents");
     if (!/approved/i.test(docs)) throw new Error(docs);
-    await shot("06-project-overview");
+    await shot("07-project-overview");
     const id = projectUrl.split("id=")[1];
     await goto(`/app/control-center/audit.html?id=${id}`, "document.querySelectorAll('#events tbody tr').length > 5", "audit rows");
     const audit = await text("#events");
-    for (const action of ["approval.record", "artifact.version_add", "decision.outcome"]) if (!audit.includes(action)) throw new Error(`audit missing ${action}`);
+    for (const action of ["approval.record", "artifact.version_add", "decision.outcome", "agent_run.request"]) if (!audit.includes(action)) throw new Error(`audit missing ${action}`);
   });
 }
 

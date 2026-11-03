@@ -1,4 +1,1 @@
-"""G4 output guardrails.
-
-Scaffold only: not implemented yet.
-"""
+"""G4 output guardrails: schema, grounding, forbidden status claims, secrets."""

@@ -21,6 +21,10 @@ const TONE = {
   open: "info",
   deferred: "warning",
   decided: "success",
+  // agent runs
+  queued: "info",
+  running: "accent",
+  succeeded: "success",
 };
 
 export function statusBadge(state) {

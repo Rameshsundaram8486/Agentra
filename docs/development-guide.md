@@ -47,6 +47,18 @@ powershell -ExecutionPolicy Bypass -File scripts\run_api.ps1   # http://127.0.0.
 - `GET /health` returns `200 {"status": "ok", "database": "ok", ...}`, or `503` with `"database": "unavailable"`.
 - API docs at `/docs` (disabled when `AGENTRA_ENV=production`).
 
+## The Business Analyst agent
+
+Agent runs need the Claude API and a worker process:
+
+1. Put `ANTHROPIC_API_KEY=...` in `.env` (never in source or chat). Use synthetic briefs only until real customer data is approved for this environment (ADR 0001).
+2. Start the worker in a second terminal: `powershell -ExecutionPolicy Bypass -File scripts\run_workers.ps1`.
+3. `uv run python -m app.cli seed-demo` gives the demo project a synthetic brief and moves Phase 7 to in progress.
+4. On the project page, choose the brief and click **Ask the Business Analyst agent**. After a minute or two the run shows as succeeded and its questions are in the decision inbox.
+
+- Each run costs roughly $0.15-0.50 at effort `high`; the run list shows the cost. `budget.monthly_usd` in `config/models.yaml` (default $50) stops new calls once this month's spend plus the next call's worst case would exceed it.
+- Model, effort and token limits per agent are in `config/models.yaml`; the prompt and output schema are in `config/agents/business_analyst/`.
+
 ## Testing
 
 ```powershell
@@ -57,6 +69,7 @@ uv run pytest tests\unit # unit tests only, no database needed
 - Integration tests use `TEST_DATABASE_URL` from `.env`, and refuse to run unless the database name ends in `_test`.
 - Browser walkthrough of the Control Center (headless Edge or Chrome, test database, port 8010): `powershell -ExecutionPolicy Bypass -File scripts\run_ui_walkthrough.ps1`. Screenshots go to `var\ui-walkthrough\screens`.
 - Tests run against real PostgreSQL, not SQLite or mocks (ADR 0002).
+- Agent tests use a scripted fake model and never call the API. One live test makes a real call (costs money): `$env:AGENTRA_LIVE_TESTS = "1"; uv run pytest tests\live -s`.
 
 ## Database migrations
 

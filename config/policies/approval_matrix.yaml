@@ -11,6 +11,10 @@
 version: 1
 
 artifact_types:
+  project_brief:
+    title: Project brief
+    approver_roles: [reviewer, owner]
+    independent_review: true
   requirements_baseline:
     title: Requirements baseline
     approver_roles: [reviewer, owner]

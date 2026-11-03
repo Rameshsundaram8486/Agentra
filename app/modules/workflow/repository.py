@@ -18,6 +18,10 @@ def get_phase_run(session: Session, phase_run_id: uuid.UUID) -> PhaseRun | None:
     return session.get(PhaseRun, phase_run_id)
 
 
+def get_phase_run_for(session: Session, project_id: uuid.UUID, phase: int) -> PhaseRun | None:
+    return session.scalar(select(PhaseRun).where(PhaseRun.project_id == project_id, PhaseRun.phase == phase))
+
+
 def get_task(session: Session, task_id: uuid.UUID) -> Task | None:
     return session.get(Task, task_id)
 

@@ -1,7 +1,8 @@
 """Shared pytest fixtures: test PostgreSQL database, settings, clock, policies and data factories.
 
 The test database is rebuilt from the migrations once per test run. Tests create their own uniquely named
-data, so they never depend on each other. The fake model provider and fake sandbox arrive in Increment 2.
+data, so they never depend on each other. Agent tests use the scripted FakeProvider; no test calls a real
+model unless AGENTRA_LIVE_TESTS=1 is set (tests/live).
 """
 
 import uuid
@@ -30,6 +31,8 @@ from app.modules.artifacts.service import ArtifactCreate
 from app.modules.decisions.service import ApprovalCreate
 from app.modules.identity.service import SYSTEM_ACTOR, Actor
 from app.modules.projects.service import ProjectCreate, ProjectView
+from app.modules.workflow.service import TransitionRequest
+from tests.agent_support import BRIEF
 from tests.support import DEFAULT_PASSWORD, Team, TestUser, alembic_config
 
 
@@ -212,6 +215,63 @@ def approve_phase_documents(run: Callable[..., Any]) -> Callable[..., list[Any]]
         return approved
 
     return _approve
+
+
+@pytest.fixture
+def ba_agent(run: Callable[..., Any]) -> TestUser:
+    """The Business Analyst agent account. There is one per database, as in a real installation."""
+    email = "business_analyst@agents.agentra.local"
+
+    def _get(s: Services) -> Actor:
+        if s.identity.agent_by_key("business_analyst") is None:
+            s.identity.create_user(
+                SYSTEM_ACTOR, email=email, display_name="Business Analyst Agent", kind="agent", agent_key="business_analyst"
+            )
+        return s.identity.agent_by_key("business_analyst")  # type: ignore[return-value]
+
+    return TestUser(actor=run(_get), email=email, password=None)
+
+
+@pytest.fixture
+def move_phase(run: Callable[..., Any]) -> Callable[..., None]:
+    """move_phase(actor, project_id, phase, *states) applies each transition in turn."""
+
+    def _move(actor: Actor, project_id: uuid.UUID, phase: int, *states: str) -> None:
+        for state in states:
+            def _step(s: Services, state: str = state) -> None:
+                current = next(p for p in s.workflow.list_phase_runs(actor, project_id) if p.phase == phase)
+                s.workflow.transition_phase_run(
+                    actor, current.id, TransitionRequest(to_state=state, reason="Test step", expected_version=current.version)
+                )
+
+            run(_step)
+
+    return _move
+
+
+@pytest.fixture
+def ba_team(team: Team, ba_agent: TestUser, add_member: Callable[..., None], move_phase: Callable[..., None]) -> Team:
+    """A team whose project has the Business Analyst agent on it and Phase 7 in progress."""
+    add_member(team.owner, team.project.id, ba_agent, "agent")
+    move_phase(team.pm.actor, team.project.id, 7, "ready", "in_progress")
+    return team
+
+
+@pytest.fixture
+def make_brief(run: Callable[..., Any]) -> Callable[..., Any]:
+    """make_brief(team, content=BRIEF, artifact_type="project_brief") -> the version view, authored by the PM."""
+
+    def _make(team: Team, content: str = BRIEF, artifact_type: str = "project_brief") -> Any:
+        artifact = run(
+            lambda s: s.artifacts.create_artifact(
+                team.pm.actor,
+                team.project.id,
+                ArtifactCreate(artifact_type=artifact_type, title=f"Brief {uuid.uuid4().hex[:6]}", content=content),
+            )
+        )
+        return artifact.current_version
+
+    return _make
 
 
 @pytest.fixture

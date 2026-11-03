@@ -107,6 +107,11 @@ class WorkflowService:
             for run in repository.phase_runs_for_project(self._session, project_id)
         ]
 
+    def phase_state(self, project_id: uuid.UUID, phase: int) -> str | None:
+        """Current state of one phase, or None if the project has no run for it. Callers authorise first."""
+        run = repository.get_phase_run_for(self._session, project_id, phase)
+        return run.state if run else None
+
     def history(self, actor: Actor, entity_type: str, entity_id: uuid.UUID) -> list[StateTransitionView]:
         entity = self._load(entity_type, entity_id)
         self._identity.require_project(actor, entity.project_id, "project.view")

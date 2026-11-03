@@ -1,4 +1,4 @@
-/* Page script: Project workspace - phases with server-approved transitions, documents, decisions and team. */
+/* Page script: Project workspace - phases with server-approved transitions, documents, agent runs, decisions and team. */
 
 import { api } from "../../core/api.js";
 import { control, formatDateTime, h, humanise } from "../../core/format.js";
@@ -98,7 +98,7 @@ async function loadDocuments() {
   const container = document.getElementById("documents");
   if (artifacts.length === 0) {
     container.replaceChildren(h("p", { class: "empty" }, "No documents yet."));
-    return;
+    return artifacts;
   }
   const rows = artifacts.map((artifact) =>
     h(
@@ -113,6 +113,92 @@ async function loadDocuments() {
   container.replaceChildren(
     h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "Document"), h("th", {}, "Version"), h("th", {}, "Approval"), h("th", {}, "Updated"))), h("tbody", {}, rows)),
   );
+  return artifacts;
+}
+
+// Agent runs ----------------------------------------------------------------------------------
+
+const RUN_POLL_MS = 4000;
+let runPoll = null;
+let runsBusy = false;
+
+function money(value) {
+  return `$${Number(value).toFixed(2)}`;
+}
+
+function runItem(run) {
+  const meta = [run.model, Number(run.cost_usd) > 0 ? money(run.cost_usd) : null, run.attempts > 1 ? `attempt ${run.attempts} of ${run.max_attempts}` : null].filter(Boolean);
+  const blocking = run.findings.filter((finding) => finding.severity === "block");
+  const warnings = run.findings.filter((finding) => finding.severity === "warn");
+  return h(
+    "li",
+    {},
+    h(
+      "div",
+      {},
+      h("div", {}, `${run.input_title} v${run.input_version_no}`),
+      h("div", { class: "muted small" }, `Asked by ${run.requested_by_name ?? "unknown"} - ${formatDateTime(run.created_at)}`),
+      meta.length ? h("div", { class: "muted small" }, meta.join(" - ")) : null,
+      run.status === "queued" ? h("div", { class: "muted small" }, "Waiting for the agent worker (scripts\\run_workers.ps1).") : null,
+      run.status === "succeeded"
+        ? h("div", { class: "small" }, h("a", { href: `decisions.html?id=${encodeURIComponent(projectId)}` }, `${run.decision_ids.length} questions are in the decision inbox`))
+        : null,
+      run.error_message ? h("div", { class: "small" }, run.error_message) : null,
+      blocking.length ? h("ul", { class: "bullets small" }, blocking.map((finding) => h("li", {}, finding.path ? `${finding.path}: ${finding.message}` : finding.message))) : null,
+      warnings.length ? h("div", { class: "muted small" }, `Noted: ${warnings.map((finding) => finding.message).join("; ")}`) : null,
+    ),
+    statusBadge(run.status),
+  );
+}
+
+async function loadAgentRuns() {
+  const runs = await api(`/api/projects/${encodeURIComponent(projectId)}/agent-runs`);
+  document.getElementById("agent-runs").replaceChildren(...runs.map(runItem));
+  const busy = runs.some((run) => run.status === "queued" || run.status === "running");
+  if (runsBusy && !busy) loadDecisionSummary().catch(() => {});
+  runsBusy = busy;
+  clearTimeout(runPoll);
+  if (busy) runPoll = setTimeout(() => loadAgentRuns().catch(() => {}), RUN_POLL_MS);
+}
+
+function enableAgent(artifacts, canRun) {
+  document.getElementById("agent-section").hidden = false;
+  if (!canRun) return;
+  const briefs = artifacts.filter((artifact) => artifact.artifact_type === "project_brief");
+  if (briefs.length === 0) {
+    document.getElementById("agent-no-brief").hidden = false;
+    return;
+  }
+  const form = document.getElementById("agent-form");
+  const message = document.getElementById("agent-error");
+  const submit = document.getElementById("agent-submit");
+  form.artifact_version_id.replaceChildren(
+    ...briefs.map((brief) => h("option", { value: brief.current_version.id }, `${brief.title} (v${brief.current_version_no})`)),
+  );
+  form.hidden = false;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    message.hidden = true;
+    submit.disabled = true;
+    try {
+      const result = await api(`/api/projects/${encodeURIComponent(projectId)}/agent-runs`, {
+        method: "POST",
+        body: { agent_key: "business_analyst", task_key: "clarify_brief", artifact_version_id: form.artifact_version_id.value },
+      });
+      if (!result.created) {
+        message.className = "alert alert-info";
+        message.textContent = "The agent has already been asked about this version; see its run below.";
+        message.hidden = false;
+      }
+      await loadAgentRuns();
+    } catch (failure) {
+      message.className = "alert alert-error";
+      message.textContent = failure.message;
+      message.hidden = false;
+    } finally {
+      submit.disabled = false;
+    }
+  });
 }
 
 async function loadDecisionSummary() {
@@ -214,10 +300,14 @@ startPage(async () => {
   }
   if (can("project.manage_members")) enableAddMember();
   if (can("artifact.author")) enableNewDocument(types);
-  await Promise.all([
+  const [, , artifacts] = await Promise.all([
     loadPhases(),
     loadMembers(),
-    can("artifact.view") ? loadDocuments() : Promise.resolve(),
+    can("artifact.view") ? loadDocuments() : Promise.resolve([]),
     can("decision.view") ? loadDecisionSummary() : Promise.resolve(),
   ]);
+  if (can("agent_run.view")) {
+    enableAgent(artifacts, can("agent.run"));
+    await loadAgentRuns();
+  }
 });

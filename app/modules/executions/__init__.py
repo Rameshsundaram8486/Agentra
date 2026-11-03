@@ -1,4 +1,2 @@
-"""Agent runs, model calls, tool calls, sandbox sessions/actions and credential leases.
-
-Scaffold only: not implemented yet.
-"""
+"""Agent runs and the model calls made for them. Tool calls, sandbox sessions and credential leases arrive
+with the agents that need them."""

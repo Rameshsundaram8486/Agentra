@@ -3,6 +3,7 @@
     uv run python -m app.cli create-user --email founder@example.com --name "Founder" --admin
     uv run python -m app.cli create-agent --key business_analyst --name "Business Analyst Agent"
     uv run python -m app.cli verify-audit
+    uv run python -m app.cli seed-demo --admin-email admin@agentra.local
 
 Migrations: uv run alembic upgrade head
 """
@@ -13,6 +14,7 @@ import sys
 from collections.abc import Callable, Sequence
 
 from app.composition import Services, load_policies
+from app.demo import seed_demo
 from app.infrastructure.clock import SystemClock
 from app.infrastructure.db import create_db_engine, make_session_factory
 from app.infrastructure.logging import configure_logging
@@ -44,6 +46,11 @@ def _parser() -> argparse.ArgumentParser:
     agent.add_argument("--name", required=True)
 
     commands.add_parser("verify-audit", help="Check the audit hash chain end to end")
+
+    demo = commands.add_parser("seed-demo", help="Create the synthetic demo project (safe to re-run)")
+    demo.add_argument("--admin-email", default="admin@agentra.local", help="Existing platform admin who owns the demo")
+    demo.add_argument("--author-email", default="pm@agentra.local", help="Demo project manager; prompted for a password if new")
+    demo.add_argument("--code", default="DEMO-LEAVE")
     return parser
 
 
@@ -86,6 +93,16 @@ def main(
                 )
                 uow.commit()
                 print(f"Created agent account {agent.agent_key} ({agent.id})")
+            elif args.command == "seed-demo":
+                lines = seed_demo(
+                    services,
+                    admin_email=args.admin_email,
+                    author_email=args.author_email,
+                    code=args.code,
+                    read_password=read_password,
+                )
+                uow.commit()
+                print("\n".join(lines))
             else:
                 result = services.audit.verify_chain()
                 if not result.ok:
