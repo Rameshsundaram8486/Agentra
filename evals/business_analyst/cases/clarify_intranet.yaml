@@ -1,0 +1,11 @@
+id: clarify_intranet
+task: clarify_brief
+description: A group intranet brief with content migration, two languages and multi-company publishing.
+brief: {file: intranet_brief.md}
+expect:
+  questions_between: [3, 8]
+  options_between: [2, 4]
+  must_ask_about:
+    content_migration: [migrat, existing polic, shared drive]
+    languages: [arabic, language, bilingual]
+    publishing_rights: [publish, permission, approv, editor]

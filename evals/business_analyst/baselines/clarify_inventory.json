@@ -1,0 +1,14 @@
+{
+  "case_id": "clarify_inventory",
+  "prompt_version": "clarify_brief.v1@14e734f416f9",
+  "score": 1.0,
+  "results": {
+    "run_succeeded": true,
+    "question_count": true,
+    "stack_and_approach_options": true,
+    "asks_about:accounting_integration": true,
+    "asks_about:offline_or_wifi": true,
+    "asks_about:reorder_rule": true
+  },
+  "updated_at": "2026-11-04T07:50:31+00:00"
+}

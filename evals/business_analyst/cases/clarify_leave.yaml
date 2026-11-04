@@ -1,0 +1,12 @@
+id: clarify_leave
+task: clarify_brief
+description: The demo leave brief. Known gaps the agent should ask about.
+brief: {file: leave_brief.md}
+expect:
+  questions_between: [3, 8]
+  options_between: [2, 4]
+  must_ask_about:
+    payroll: [payroll]
+    staff_without_email: [warehouse, email account, without company email, shared tablet]
+    languages: [arabic]
+    absent_manager: [away, absent, delegat, deputy, cover, unavailable]

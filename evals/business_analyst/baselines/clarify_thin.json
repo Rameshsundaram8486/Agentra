@@ -1,0 +1,13 @@
+{
+  "case_id": "clarify_thin",
+  "prompt_version": "clarify_brief.v1@14e734f416f9",
+  "score": 1.0,
+  "results": {
+    "run_succeeded": true,
+    "question_count": true,
+    "asks_about:timeline": true,
+    "asks_about:clinic_systems": true,
+    "asks_about:patients_and_identity": true
+  },
+  "updated_at": "2026-11-04T07:52:56+00:00"
+}

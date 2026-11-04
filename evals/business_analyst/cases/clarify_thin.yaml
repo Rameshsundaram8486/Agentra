@@ -1,0 +1,10 @@
+id: clarify_thin
+task: clarify_brief
+description: A very thin brief. The agent should ask about the basics, not invent them.
+brief: {file: thin_brief.md}
+expect:
+  questions_between: [3, 8]
+  must_ask_about:
+    timeline: [soon, timeline, date, deadline, when]
+    clinic_systems: [existing, system, calendar, practice management, integrat]
+    patients_and_identity: [patient, account, verif, identity, sign]

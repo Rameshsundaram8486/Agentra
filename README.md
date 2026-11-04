@@ -2,7 +2,7 @@
 
 AI-native operating platform for an IT services company. Specialised agents do bounded work, a workflow engine owns state, and humans approve consequential decisions against exact artifact versions.
 
-> **Status: Increment 4a done: Phase 8 options, solution design and requirement-to-design coverage.** Working so far:
+> **Status: Increment 4a done: Phase 8 options, solution design and requirement-to-design coverage; agent evals harness.** Working so far:
 > - sign-in with server sessions
 > - projects and role-based memberships
 > - a workflow engine driven by YAML lifecycles, with entry and exit gates, optimistic locking and a record of every transition
@@ -26,6 +26,7 @@ AI-native operating platform for an IT services company. Specialised agents do b
 > - requirements reports (executive summary; detailed BRD and traceability) built only from records, versioned, with provenance; customers see the summary only
 > - incident records opened automatically from failed agent runs, resolved with a root-cause analysis and closed by a different person
 > - the Solution Architect agent: compares solution options (scored by the agent, totalled by Agentra) for people to choose, then drafts the solution design with stable IDs, unverified capabilities flagged, and every confirmed requirement covered or excepted; Phase 8 cannot complete otherwise, and a design goes stale when the approved requirements change
+> - agent evals: synthetic cases for the Business Analyst agent, graded in code; recorded answers replay for free, and regressions against the committed baseline fail the run
 >
 > Everything else is still scaffold: those files carry a one-line purpose header and say "Scaffold only". See [docs/architecture/overview.md](docs/architecture/overview.md).
 
@@ -54,7 +55,7 @@ See [docs/development-guide.md](docs/development-guide.md). In short: `scripts\c
 | `sandbox-agent/` | Small service inside sandbox VMs (commands, screenshots, mouse/keyboard) |
 | `infra/` | VM images (Packer), network rules, Azure (Bicep), local Hyper-V and PostgreSQL setup |
 | `migrations/` | Alembic migrations (PostgreSQL) |
-| `evals/` | Golden cases and graders per agent |
+| `evals/` | Agent evals: synthetic cases, recordings, baselines and code graders per agent |
 | `tests/` | unit, workflow, security, integration, e2e |
 | `scripts/` | Local setup and run scripts |
 

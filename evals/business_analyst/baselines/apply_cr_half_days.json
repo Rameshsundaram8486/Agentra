@@ -1,0 +1,11 @@
+{
+  "case_id": "apply_cr_half_days",
+  "prompt_version": "apply_change_request.v1@933f257adb54",
+  "score": 1.0,
+  "results": {
+    "run_succeeded": true,
+    "changed:REQ-F-001": true,
+    "same_items": true
+  },
+  "updated_at": "2026-11-04T07:46:55+00:00"
+}

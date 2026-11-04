@@ -1,0 +1,14 @@
+{
+  "case_id": "clarify_intranet",
+  "prompt_version": "clarify_brief.v1@14e734f416f9",
+  "score": 1.0,
+  "results": {
+    "run_succeeded": true,
+    "question_count": true,
+    "stack_and_approach_options": true,
+    "asks_about:content_migration": true,
+    "asks_about:languages": true,
+    "asks_about:publishing_rights": true
+  },
+  "updated_at": "2026-11-04T07:49:23+00:00"
+}

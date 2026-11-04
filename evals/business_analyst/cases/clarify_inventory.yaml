@@ -1,0 +1,11 @@
+id: clarify_inventory
+task: clarify_brief
+description: A stock-control brief with an unknown accounting integration, patchy Wi-Fi and a vague low-stock rule.
+brief: {file: inventory_brief.md}
+expect:
+  questions_between: [3, 8]
+  options_between: [2, 4]
+  must_ask_about:
+    accounting_integration: [accounting, invoic, integrat]
+    offline_or_wifi: [offline, wi-fi, wifi, connectivity, signal]
+    reorder_rule: [reorder, low stock, threshold, minimum]

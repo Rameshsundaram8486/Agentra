@@ -1,0 +1,18 @@
+{
+  "case_id": "draft_leave",
+  "prompt_version": "draft_requirements.v2@ca75a0e9edbe",
+  "score": 1.0,
+  "results": {
+    "run_succeeded": true,
+    "item_count": true,
+    "kinds_present": true,
+    "criteria_coverage": true,
+    "objective_trace": true,
+    "mentions:payroll_export": true,
+    "mentions:medical_certificate": true,
+    "mentions:record_retention": true,
+    "ambiguity:hr_second_approval": true,
+    "contradiction:decision_deadline": true
+  },
+  "updated_at": "2026-11-04T07:58:40+00:00"
+}

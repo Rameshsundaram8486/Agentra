@@ -1,0 +1,20 @@
+id: draft_inventory
+task: draft_requirements
+description: >
+  The stock-control brief and site visit notes. Planted: one warehouse (brief) vs three (notes), and a low-stock
+  alert with no threshold.
+brief: {file: inventory_brief.md}
+documents:
+  - {title: Site visit notes, content: {file: inventory_site_visit_notes.md}}
+expect:
+  items_between: [15, 100]
+  kinds_present: [objective, stakeholder, functional, non_functional]
+  criteria_coverage_min: 0.95
+  objective_trace_min: 0.8
+  must_mention:
+    stock_valuation: [valuation, average cost]
+    items_without_barcodes: [barcode]
+  contradiction_raised:
+    number_of_warehouses: [warehouse]
+  ambiguity_handled:
+    reorder_threshold: [reorder level, reorder point, threshold, minimum stock, low stock]

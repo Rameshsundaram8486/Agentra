@@ -1,0 +1,23 @@
+id: draft_leave
+task: draft_requirements
+description: >
+  The leave brief with discovery notes, an HR policy extract and workshop answers. Planted: a contradiction on how
+  many working days a manager has to decide (2 vs 5), and an unsettled question of whether HR also approves.
+brief: {file: leave_brief.md}
+documents:
+  - {title: Discovery notes, content: {file: leave_discovery_notes.md}}
+  - {title: HR policy extract, content: {file: leave_hr_policy_extract.md}}
+  - {title: Workshop answers, content: {file: leave_workshop_answers.md}}
+expect:
+  items_between: [25, 120]
+  kinds_present: [objective, stakeholder, functional, non_functional, user_story, business_rule]
+  criteria_coverage_min: 0.95
+  objective_trace_min: 0.8
+  must_mention:
+    payroll_export: [payroll]
+    medical_certificate: [medical certificate]
+    record_retention: [six years, 6 years]
+  contradiction_raised:
+    decision_deadline: [working days]
+  ambiguity_handled:
+    hr_second_approval: [hr approval, approved by hr, hr approve, second approval, approval route, approval chain]

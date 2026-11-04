@@ -1,0 +1,21 @@
+id: apply_cr_half_days
+task: apply_change_request
+description: An approved change request adds half-day leave to REQ-F-001 only; every other item must come back unchanged.
+brief: {file: leave_brief.md}
+baseline_items:
+  - {ref: new-1, kind: objective, title: One online leave process, statement: All leave requests go through one online process instead of email and paper forms., label: fact, priority: not_set, acceptance_criteria: [], sources: [{ref: DOC-1, quote: Leave requests are made by email or on paper forms.}], related: [], suggested_answers: [], recommended_answer: null, recommendation_rationale: ""}
+  - {ref: new-2, kind: stakeholder, title: Line managers, statement: Line managers approve or reject their team's leave requests., label: fact, priority: not_set, acceptance_criteria: [], sources: [{ref: DOC-1, quote: Line managers approve or reject requests}], related: [], suggested_answers: [], recommended_answer: null, recommendation_rationale: ""}
+  - {ref: new-3, kind: functional, title: Request leave online, statement: "Employees can request annual, sick, unpaid and compassionate leave online.", label: fact, priority: must, acceptance_criteria: [A request of each of the four leave types can be submitted and then appears in the employee's own list.], sources: [{ref: DOC-1, quote: "Employees request annual, sick, unpaid and compassionate leave online"}], related: [new-1], suggested_answers: [], recommended_answer: null, recommendation_rationale: ""}
+  - {ref: new-4, kind: functional, title: Approve or reject, statement: A line manager can approve or reject each pending request from their team., label: fact, priority: must, acceptance_criteria: [An approved or rejected request shows the new status to the employee.], sources: [{ref: DOC-1, quote: Line managers approve or reject requests}], related: [new-1], suggested_answers: [], recommended_answer: null, recommendation_rationale: ""}
+  - {ref: new-5, kind: functional, title: Team calendar, statement: A line manager can see the team's leave calendar before deciding on a request., label: fact, priority: should, acceptance_criteria: [The calendar shows approved and pending leave for the requested dates.], sources: [{ref: DOC-1, quote: "can see their team's calendar before deciding"}], related: [new-1], suggested_answers: [], recommended_answer: null, recommendation_rationale: ""}
+  - {ref: new-6, kind: non_functional, title: Balances follow UAE labour law, statement: Leave balances are calculated according to UAE labour law and are visible to employees., label: fact, priority: must, acceptance_criteria: [For a test employee with 2 years of service the balance matches HR's own calculation to within 0.5 days.], sources: [{ref: DOC-1, quote: Balances are calculated according to UAE labour law}], related: [new-1], suggested_answers: [], recommended_answer: null, recommendation_rationale: ""}
+change_request:
+  title: Half-day leave
+  reason: HR confirmed that staff often take half days.
+  change: Change REQ-F-001 so employees can request leave in half days as well as full days.
+  impact: Small; one more option in the request form and the balance calculation.
+  affected_item_ids: [REQ-F-001]
+expect:
+  unchanged_count: true
+  changed_items_contain:
+    REQ-F-001: [half]

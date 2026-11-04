@@ -82,6 +82,7 @@ uv run pytest tests\unit # unit tests only, no database needed
 - Browser walkthrough of the Control Center (headless Edge or Chrome, test database, port 8010): `powershell -ExecutionPolicy Bypass -File scripts\run_ui_walkthrough.ps1`. Screenshots go to `var\ui-walkthrough\screens`.
 - Tests run against real PostgreSQL, not SQLite or mocks (ADR 0002).
 - Agent tests use a scripted fake model and never call the API. One live test makes a real call (costs money): `$env:AGENTRA_LIVE_TESTS = "1"; uv run pytest tests\live -s`.
+- Agent quality evals (`evals/README.md`): `uv run python -m evals.runner` replays the recorded answers for free and flags regressions against the committed baseline. `--mode live --cap 5` records new answers (costs money; about $2-3 for all cases). Run them before you change a prompt, model, effort level or guardrail.
 
 ## Database migrations
 
