@@ -29,7 +29,9 @@ class TaskSpec(_Strict):
     phase_states: tuple[str, ...] = Field(min_length=1)
     input_artifact_types: tuple[str, ...] = Field(min_length=1)  # the main input, chosen by the person asking
     context_artifact_types: tuple[str, ...] = ()  # every current document of these types is included too
-    context_decisions_from: tuple[str, ...] = ()  # decisions raised by this agent's earlier runs of these tasks
+    # Decisions raised by earlier runs of these tasks: "task" for this agent's own, "agent.task" for another's.
+    context_decisions_from: tuple[str, ...] = ()
+    input_must_be_approved: bool = False  # the main input version must be approved (a baseline to build on)
     context_reviews_of: tuple[str, ...] = ()  # review comments (changes requested, rejected) on current versions
     requires_change_request: bool = False  # the person asking names an approved change request to apply
     prompt: str
@@ -46,6 +48,11 @@ class AgentSpec(_Strict):
     autonomy: Literal["supervised"]
     risk_class: Literal["low", "medium", "high"]
     tasks: dict[str, TaskSpec] = Field(min_length=1)
+
+
+def task_refs(agent_key: str, refs: tuple[str, ...]) -> list[tuple[str, str]]:
+    """("agent", "task") pairs for context_decisions_from entries."""
+    return [tuple(ref.split(".", 1)) if "." in ref else (agent_key, ref) for ref in refs]  # type: ignore[misc]
 
 
 class TaskDefinition(_Strict):

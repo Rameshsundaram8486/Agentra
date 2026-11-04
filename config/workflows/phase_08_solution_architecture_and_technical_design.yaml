@@ -1,5 +1,7 @@
 # Phase 8 - Solution Architecture and Technical Design: states, tasks, entry/exit gates, required approvals. Primary agent: solution_architect.
-# Tasks are defined in Increment 4 (Phase 8 slice).
+# The agent tasks behind these are in config/agents/solution_architect/agent.yaml (workflow_task).
+# design_coverage: the current design is not stale and covers every confirmed requirement, or documents why not.
+# Security sign-off, feasibility review and the implementation backlog arrive with Increment 4b.
 key: phase_08_solution_architecture_and_technical_design
 version: 1
 phase: 8
@@ -11,4 +13,14 @@ entry:
   requires_completed_phases: [7]
 exit:
   required_approvals: [design_baseline]
-tasks: []
+  checks: [design_coverage]
+tasks:
+  - key: compare_options
+    title: Compare solution options
+    agent: solution_architect
+    requires_answered_questions: true
+  - key: draft_design
+    title: Draft and review the design
+    agent: solution_architect
+    depends_on: [compare_options]
+    required_approvals: [design_baseline]

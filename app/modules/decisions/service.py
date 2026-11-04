@@ -6,7 +6,7 @@ never changed; each human response is a separate, numbered outcome.
 """
 
 import uuid
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Mapping
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -59,13 +59,16 @@ class DecisionsService:
         identity: IdentityService,
         artifacts: ArtifactsService,
         matrix: ApprovalMatrix,
+        approval_checks: Mapping[str, Callable[[uuid.UUID], list[str]]] | None = None,
     ) -> None:
+        """approval_checks: artifact type -> problems with approving a given version (from other modules)."""
         self._session = session
         self._clock = clock
         self._audit = audit
         self._identity = identity
         self._artifacts = artifacts
         self._matrix = matrix
+        self._approval_checks = approval_checks or {}
 
     # Approvals ------------------------------------------------------------------------------
 
@@ -82,6 +85,9 @@ class DecisionsService:
             policy,
             self._artifacts.author_ids(version.artifact_id),
         )
+        if data.decision == "approved" and (check := self._approval_checks.get(version.artifact_type)):
+            if problems := check(version.id):
+                raise InvalidTransitionError("Cannot approve this version: " + "; ".join(problems))
         content_sha256 = check_binding(version, data.content_sha256)
         self._artifacts.verify_content(version.id)
         comment = (data.comment or "").strip() or None

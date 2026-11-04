@@ -15,7 +15,7 @@ exactly those items. Rules enforced here, not by the agent:
 
 import re
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -99,7 +99,9 @@ class RequirementsService:
         decisions: DecisionsService,
         projects: ProjectsService,
         change_request_roles: Sequence[str] = ("owner", "customer_approver"),
+        design_lookup: Callable[[uuid.UUID], Mapping[str, list[str]] | None] | None = None,
     ) -> None:
+        """design_lookup(project_id) maps requirement IDs to the design items covering them (design module)."""
         self._session = session
         self._clock = clock
         self._audit = audit
@@ -108,6 +110,7 @@ class RequirementsService:
         self._decisions = decisions
         self._projects = projects
         self._change_request_roles = tuple(change_request_roles)
+        self._design_lookup = design_lookup
 
     # For agent tasks --------------------------------------------------------------------------
 
@@ -128,6 +131,15 @@ class RequirementsService:
         if not locked or record is None or record.id != request.baseline_version_id:
             return f"{self._cr_label(request)} was raised against a baseline version that is no longer the approved current version"
         return None
+
+    def current_baseline(self, project_id: uuid.UUID) -> tuple[VersionRecord, str] | None:
+        """The current requirements version and its approval status. Callers authorise first."""
+        record = self._baseline_record(project_id)
+        return (record, self._decisions.approval_statuses([record.id])[record.id]) if record else None
+
+    def items_of_version(self, version_id: uuid.UUID) -> list[RequirementItemView]:
+        """Items of one drafted requirements version. Callers authorise first."""
+        return [self._item_view(row) for row in repository.items_for(self._session, version_id)]
 
     def current_items(self, project_id: uuid.UUID) -> list[RequirementItemView]:
         """Items of the latest drafted version, for an agent revising them. Callers authorise first."""
@@ -326,7 +338,8 @@ class RequirementsService:
         record = self._baseline_record(project_id)
         if record is None:
             return None
-        rows, gaps = build_rows([self._item_view(row) for row in repository.items_for(self._session, record.id)])
+        design = self._design_lookup(project_id) if self._design_lookup else None
+        rows, gaps = build_rows([self._item_view(row) for row in repository.items_for(self._session, record.id)], design)
         return TraceabilityView(
             version_id=record.id,
             version_no=record.version_no,

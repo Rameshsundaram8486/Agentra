@@ -64,6 +64,8 @@ Agent runs need the Claude API and a worker process:
 10. Under **Reports**, generate the requirements executive summary or the detailed BRD and traceability report. Each opens in the report viewer; **Open printable version** prints to PDF from the browser. Generating again with nothing changed returns the same version.
 11. A failed agent run opens an incident (project page, **Incidents**). Resolve it with a root-cause analysis; someone else verifies and closes it.
 
+12. Phase 8: once the requirements are approved and Phase 7 is completed, start Phase 8, then in the **Agents** panel choose **Solution Architect: compare solution options**, choose an option in Decisions, close the Compare task, and ask for **Solution Architect: draft the design**. The **Solution design** section shows coverage; Phase 8 completes only when every confirmed requirement is covered or excepted.
+
 `seed-demo` also adds tasks defined after a project was opened (for projects from before Increment 3a) and links earlier agent runs to them.
 
 - A clarify run costs roughly $0.15-0.30, and a requirements draft, redraft or applied change request roughly $0.35-0.60 each at effort `high`; the run list shows the cost. `budget.monthly_usd` in `config/models.yaml` (default $50) stops new calls once this month's spend plus the next call's worst case would exceed it.

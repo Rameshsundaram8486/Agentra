@@ -37,7 +37,7 @@ from app.modules.errors import InvalidTransitionError
 from app.modules.identity.service import SYSTEM_ACTOR, Actor
 from app.modules.projects.service import ProjectCreate, ProjectView
 from app.modules.workflow.service import TransitionRequest
-from tests.agent_support import BRIEF, DISCOVERY_NOTES, ask, ba_json, move_task, phase_task, process
+from tests.agent_support import BRIEF, DISCOVERY_NOTES, ask, ba_json, draft_items, draft_json, move_task, phase_task, process
 from tests.support import DEFAULT_PASSWORD, Team, TestUser, alembic_config
 
 
@@ -238,6 +238,21 @@ def ba_agent(run: Callable[..., Any]) -> TestUser:
 
 
 @pytest.fixture
+def sa_agent(run: Callable[..., Any]) -> TestUser:
+    """The Solution Architect agent account (one per database)."""
+    email = "solution_architect@agents.agentra.local"
+
+    def _get(s: Services) -> Actor:
+        if s.identity.agent_by_key("solution_architect") is None:
+            s.identity.create_user(
+                SYSTEM_ACTOR, email=email, display_name="Solution Architect Agent", kind="agent", agent_key="solution_architect"
+            )
+        return s.identity.agent_by_key("solution_architect")  # type: ignore[return-value]
+
+    return TestUser(actor=run(_get), email=email, password=None)
+
+
+@pytest.fixture
 def move_phase(run: Callable[..., Any]) -> Callable[..., None]:
     """move_phase(actor, project_id, phase, *states) applies each transition in turn."""
 
@@ -342,6 +357,28 @@ def clarified(
     move_task(run, team.pm.actor, phase_task(run, team, "clarify_brief"), "completed")
     model.requests.clear()
     return team, brief
+
+
+@pytest.fixture
+def phase8(
+    clarified: tuple[Team, Any], run: Callable[..., Any], runner_for: Callable[..., AgentRunner], model: FakeProvider,
+    sa_agent: TestUser, add_member: Callable[..., None], move_phase: Callable[..., None],
+) -> Team:
+    """Requirements drafted and approved, Phase 7 completed, the Solution Architect on the team, Phase 8 in progress."""
+    team, brief = clarified
+    model.add(fake_response(draft_json([i for i in draft_items() if i["kind"] != "open_question"])))
+    process(runner_for(), ask(run, team, "draft_requirements", brief.id).run.id)
+    version_id = run(lambda s: s.requirements.view(team.owner.actor, team.project.id)).version_id
+    run(lambda s: s.decisions.record_approval(team.reviewer.actor, version_id, ApprovalCreate(
+        decision="approved", content_sha256=s.artifacts.version_record(version_id).content_sha256)))
+    move_task(run, team.reviewer.actor, phase_task(run, team, "draft_requirements"), "completed")
+    move_phase(team.pm.actor, team.project.id, 7, "waiting_for_review")
+    move_phase(team.reviewer.actor, team.project.id, 7, "completed")
+    add_member(team.owner, team.project.id, sa_agent, "agent")
+    move_phase(team.owner.actor, team.project.id, 8, "ready")
+    move_phase(team.pm.actor, team.project.id, 8, "in_progress")
+    model.requests.clear()
+    return team
 
 
 @pytest.fixture

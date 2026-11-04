@@ -126,6 +126,22 @@
           <div class="card card-flush" id="traceability"></div>
         </section>
 
+        <section class="section" id="design-section" hidden>
+          <div class="section-header">
+            <h2>Solution design</h2>
+            <span class="muted small">IDs, statuses and coverage are set by Agentra, not by the agent.</span>
+          </div>
+          <div class="card" id="design-summary"></div>
+          <div class="card card-flush" id="design-items"></div>
+          <details class="card" id="design-diagrams">
+            <summary>Diagrams (Mermaid source)</summary>
+            <h3>Components</h3>
+            <pre class="content-view" id="component-diagram"></pre>
+            <h3>Data flows</h3>
+            <pre class="content-view" id="data-flow-diagram"></pre>
+          </details>
+        </section>
+
         <section class="section" id="change-section" hidden>
           <div class="section-header">
             <h2>Change requests</h2>
@@ -176,33 +192,30 @@
       <div class="section">
         <section class="section" id="agent-section" hidden>
           <div class="section-header">
-            <h2>Business Analyst agent</h2>
+            <h2>Agents</h2>
           </div>
           <div class="card">
             <form id="agent-form" class="form" hidden>
               <p class="muted small">
-                First the agent reads the brief and asks about the technology stack, the delivery approach and
-                anything unclear. Once those questions are dealt with and the Clarify task is closed, it drafts the
-                requirements from the brief, the source documents and your answers. It recommends; people decide.
-                Each run is a paid model call.
+                Phase 7: the Business Analyst asks about the brief, then drafts the requirements from the brief, the
+                source documents and your answers. Phase 8: once the requirements are approved, the Solution Architect
+                compares solution options for you to choose from, then drafts the design on the chosen option.
+                Agents recommend; people decide. Each run is a paid model call.
               </p>
               <div class="field">
                 <label for="agent-task">Task</label>
-                <select id="agent-task" name="task_key">
-                  <option value="clarify_brief">Ask about the brief</option>
-                  <option value="draft_requirements">Draft the requirements</option>
-                </select>
+                <select id="agent-task" name="task_key"></select>
               </div>
               <div class="field">
-                <label for="agent-brief">Project brief</label>
+                <label for="agent-brief">Works from</label>
                 <select id="agent-brief" name="artifact_version_id"></select>
+                <span class="hint" id="agent-no-brief" hidden></span>
               </div>
               <div id="agent-error" class="alert alert-error" role="alert" hidden></div>
               <div class="actions">
-                <button class="button" type="submit" id="agent-submit">Ask the Business Analyst agent</button>
+                <button class="button" type="submit" id="agent-submit">Ask the agent</button>
               </div>
             </form>
-            <p id="agent-no-brief" class="muted small" hidden>Add a document of type Project brief first; the agent works from it.</p>
             <ul class="list" id="agent-runs"></ul>
           </div>
         </section>

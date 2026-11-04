@@ -28,6 +28,7 @@ Browser (web/control-center, plain HTML/JS)
 | `projects` | projects | audit, identity, workflow |
 | `executions` | agent runs (linked to workflow tasks, with their inputs), model calls (the spend ledger) | audit, identity, artifacts, workflow, decisions |
 | `requirements` | requirement items, versions and the item ID registry; quality checks; BRD rendering; change requests; traceability | audit, identity, artifacts, decisions, projects |
+| `design` | design items, versions tied to the approved requirements version, design ID registry; coverage, staleness, the solution design document | audit, identity, artifacts, decisions, projects, requirements |
 | `oversight` | incidents and their events (recurrences, root-cause analyses, closure); rules from `config/policies/incident_rules.yaml` | audit, identity |
 | `reporting` | report versions; data built from other modules' records, rendered with Jinja2 templates; visibility from `config/policies/report_visibility.yaml` | all of the above, read-only |
 
@@ -83,6 +84,20 @@ Worker (app/workers/workflow_worker.py) claims the job
 - **Review comments are inputs.** A redraft reads every comment requesting changes on the current version and must answer each one; the answers are stored with the version and shown in the document.
 - **The Clarify task cannot be closed while a question it raised is still open** (answer or defer it).
 - Uploaded files are parsed on the host with size, page and decompression limits; the extracted text is what agents read and quote, and the original file is kept by its hash.
+
+## Phase 8 flow (Increment 4a)
+
+| Step | Who | Workflow task |
+|---|---|---|
+| Complete Phase 7 (approved requirements); start Phase 8 | Owner, project manager, reviewer | |
+| Ask the Solution Architect to compare options; it works from the approved requirements only | Owner or project manager; the agent runs | Compare: in progress, then waiting for input |
+| Choose an option in the decision inbox (the agent scores, Agentra totals); close the Compare task | People | Compare: completed (only once its question is answered or deferred) |
+| Ask it to draft the design | Owner or project manager; the agent runs | Draft design: waiting for input (open questions) or waiting for review |
+| Approve the solution design; complete the task; complete Phase 8 | Reviewer or owner (not its author) | Phase 8 completes only if the design is current and covers every confirmed requirement or documents an exception |
+
+- **Coverage is computed by Agentra** from each design item's `satisfies` list and the documented exceptions, against the exact approved requirements version the design names. The traceability matrix's design column comes from it.
+- **Stale designs:** when the approved requirements change (a change request applied), the design is stale: it cannot be approved and Phase 8 cannot complete until it is redrafted against the newly approved requirements. That redraft may replace an approved design, because the approved change request authorised the change.
+- **Cross-module hooks** are wired in `app/composition.py`, never imported across modules: the workflow's named exit check `design_coverage`, the decisions module's approval precondition for `design_baseline`, and the requirements module's design lookup.
 
 ## Reports and incidents
 

@@ -6,7 +6,7 @@ from functools import cached_property
 
 from sqlalchemy.orm import Session
 
-from app.harness.registry import AgentDefinitionError, AgentRegistry, load_registry
+from app.harness.registry import AgentDefinitionError, AgentRegistry, load_registry, task_refs
 from app.infrastructure.clock import Clock
 from app.infrastructure.settings import ROOT_DIR
 from app.infrastructure.storage.base import ArtifactStore
@@ -15,6 +15,7 @@ from app.modules.artifacts.service import ArtifactsService
 from app.modules.audit.service import AuditService
 from app.modules.decisions.authority import ApprovalMatrix, load_approval_matrix
 from app.modules.decisions.service import DecisionsService
+from app.modules.design.service import DESIGN_TYPE, DesignService
 from app.modules.executions.service import ExecutionsService
 from app.modules.identity.authz import PermissionPolicy, load_permission_policy
 from app.modules.identity.service import IdentityService
@@ -28,6 +29,7 @@ from app.modules.workflow.definitions import WorkflowCatalog, WorkflowDefinition
 from app.modules.workflow.service import WorkflowService
 
 CONFIG_DIR = ROOT_DIR / "config"
+EXIT_CHECKS = frozenset({"design_coverage"})  # named phase exit checks wired in Services.workflow
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,9 @@ class Policies:
 
 def _check_cross_references(catalog: WorkflowCatalog, approvals: ApprovalMatrix, agents: AgentRegistry) -> None:
     for number, phase in catalog.phases.items():
+        unknown_checks = set(phase.exit.checks) - EXIT_CHECKS
+        if unknown_checks:
+            raise WorkflowDefinitionError(f"phase {number} names unknown exit checks {sorted(unknown_checks)}")
         required = set(phase.exit.required_approvals).union(*(task.required_approvals for task in phase.tasks))
         unknown = required - set(approvals.artifact_types)
         if unknown:
@@ -66,7 +71,7 @@ def _check_cross_references(catalog: WorkflowCatalog, approvals: ApprovalMatrix,
         unknown = set(task.spec.context_artifact_types + task.spec.context_reviews_of) - set(approvals.artifact_types)
         if unknown:
             raise AgentDefinitionError(f"{name} reads unknown context artifact types {sorted(unknown)}")
-        unknown = set(task.spec.context_decisions_from) - {key for (a, key) in agents.tasks if a == agent_key}
+        unknown = set(task_refs(agent_key, task.spec.context_decisions_from)) - set(agents.tasks)
         if unknown:
             raise AgentDefinitionError(f"{name} takes decisions from unknown tasks {sorted(unknown)}")
         lifecycle = catalog.lifecycle(catalog.phase(task.spec.phase).lifecycle)
@@ -133,7 +138,14 @@ class Services:
     @cached_property
     def decisions(self) -> DecisionsService:
         return DecisionsService(
-            self.session, self.clock, self.audit, self.identity, self.artifacts, self.policies.approvals
+            self.session,
+            self.clock,
+            self.audit,
+            self.identity,
+            self.artifacts,
+            self.policies.approvals,
+            # Resolved lazily: the design service is built on top of this one.
+            approval_checks={DESIGN_TYPE: lambda version_id: self.design.approval_problems(version_id)},
         )
 
     @cached_property
@@ -145,8 +157,9 @@ class Services:
             self.audit,
             self.identity,
             self.decisions,
-            # Resolved lazily: the executions service is built on top of this one.
+            # Resolved lazily: the executions and design services are built on top of this one.
             open_questions=lambda task_id: self.executions.open_questions(task_id),
+            exit_checks={"design_coverage": lambda project_id: self.design.coverage_failures(project_id)},
         )
 
     @cached_property
@@ -200,4 +213,11 @@ class Services:
             self.decisions,
             self.projects,
             self.policies.approvals.change_requests.required_roles,
+            design_lookup=lambda project_id: self.design.coverage_by_requirement(project_id),
+        )
+
+    @cached_property
+    def design(self) -> DesignService:
+        return DesignService(
+            self.session, self.clock, self.audit, self.identity, self.artifacts, self.decisions, self.projects, self.requirements
         )

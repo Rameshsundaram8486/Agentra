@@ -2,7 +2,7 @@
 
 AI-native operating platform for an IT services company. Specialised agents do bounded work, a workflow engine owns state, and humans approve consequential decisions against exact artifact versions.
 
-> **Status: Increment 3 (Phase 7) done: requirements, change control, traceability, reports and incidents.** Working so far:
+> **Status: Increment 4a done: Phase 8 options, solution design and requirement-to-design coverage.** Working so far:
 > - sign-in with server sessions
 > - projects and role-based memberships
 > - a workflow engine driven by YAML lifecycles, with entry and exit gates, optimistic locking and a record of every transition
@@ -25,6 +25,7 @@ AI-native operating platform for an IT services company. Specialised agents do b
 > - a requirements traceability matrix (objectives, requirements, user stories, acceptance criteria, sources) with gap checks and CSV export
 > - requirements reports (executive summary; detailed BRD and traceability) built only from records, versioned, with provenance; customers see the summary only
 > - incident records opened automatically from failed agent runs, resolved with a root-cause analysis and closed by a different person
+> - the Solution Architect agent: compares solution options (scored by the agent, totalled by Agentra) for people to choose, then drafts the solution design with stable IDs, unverified capabilities flagged, and every confirmed requirement covered or excepted; Phase 8 cannot complete otherwise, and a design goes stale when the approved requirements change
 >
 > Everything else is still scaffold: those files carry a one-line purpose header and say "Scaffold only". See [docs/architecture/overview.md](docs/architecture/overview.md).
 

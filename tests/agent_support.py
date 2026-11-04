@@ -207,3 +207,69 @@ def phase_task(run: Any, team: Any, key: str, phase: int = 7) -> Any:
 def move_task(run: Any, actor: Any, task: Any, to_state: str) -> Any:
     request = TransitionRequest(to_state=to_state, reason="Test step", expected_version=task.version)
     return run(lambda s: s.workflow.transition_task(actor, task.id, request))
+
+
+# Scripted Solution Architect outputs (Phase 8)
+
+def compare_output(**changes: Any) -> dict[str, Any]:
+    criteria = [
+        {"key": "fit", "title": "Fit to requirements", "weight": 5, "description": "Covers the leave workflow"},
+        {"key": "cost", "title": "Cost", "weight": 3, "description": "Licences and build effort"},
+        {"key": "skills", "title": "Team skills", "weight": 2, "description": "Two-person IT team"},
+    ]
+
+    def option(key: str, scores: tuple[int, int, int]) -> dict[str, Any]:
+        return {
+            "key": key, "title": key.replace("_", " ").title(), "description": f"Build on {key}.",
+            "scores": [{"criterion": c["key"], "score": s, "rationale": "Reason"} for c, s in zip(criteria, scores)],
+            "pros": ["Quick"], "cons": ["Licences"], "risks": ["Limits"],
+        }
+
+    output = {
+        "summary": "The choice is driven by fit and cost.",
+        "criteria": criteria,
+        "options": [option("power_apps", (4, 4, 5)), option("custom_web_app", (5, 2, 2))],
+        "recommended_option": "power_apps",
+        "recommendation_rationale": "Best balance for a small team.",
+        "assumptions": ["Licences include Power Apps"],
+        "unverified_capabilities": ["Dataverse capacity included in current licences"],
+        "sources": [{"ref": "REQ-F-001", "quote": ""}, {"ref": "DEC-1", "quote": ""}, {"ref": "DOC-1", "quote": BRIEF_QUOTE}],
+    }
+    output.update(changes)
+    return output
+
+
+def ditem(ref: str, kind: str, title: str, satisfies: list[str] | None = None, *, related: list[str] | None = None, **changes: Any) -> dict[str, Any]:
+    item = {
+        "ref": ref, "kind": kind, "title": title, "description": f"{title} description.", "rationale": "Because." if kind == "decision" else "",
+        "label": "suggestion", "satisfies": satisfies or [], "related": related or [], "unverified_capabilities": [],
+        "sources": [{"ref": (satisfies or ["REQ-F-001"])[0], "quote": ""}],
+        "suggested_answers": [], "recommended_answer": None, "recommendation_rationale": "",
+    }
+    item.update(changes)
+    return item
+
+
+def design_items() -> list[dict[str, Any]]:
+    return [
+        ditem("new-1", "component", "Leave app", ["REQ-F-001", "REQ-F-002"]),
+        ditem("new-2", "interface", "Reminder emails", ["REQ-F-003"], related=["new-1"]),
+        ditem("new-3", "entity", "Leave request", ["REQ-F-001"], related=["new-1"]),
+        ditem("new-4", "security_control", "Sign-in with Microsoft 365", ["REQ-F-001"], related=["new-1"],
+              unverified_capabilities=["Conditional access is licensed"]),
+        ditem("new-5", "environment", "Production tenant", [], related=["new-1"]),
+        ditem("new-6", "decision", "Use Power Apps", ["REQ-F-002"], related=["new-1"]),
+    ]
+
+
+def design_json(items: list[dict[str, Any]] | None = None, **changes: Any) -> str:
+    output = {
+        "summary": "A Power Apps leave app on the existing tenant.",
+        "component_diagram": "flowchart LR\n  U[Employee] --> A[Leave app]",
+        "data_flow_diagram": "flowchart LR\n  A[Leave app] --> M[Manager email]",
+        "items": items if items is not None else design_items(),
+        "exceptions": [],
+        "review_responses": [],
+    }
+    output.update(changes)
+    return json.dumps(output)

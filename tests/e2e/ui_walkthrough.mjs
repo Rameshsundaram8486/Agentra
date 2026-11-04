@@ -292,6 +292,19 @@ async function main() {
     await shot("10-change-request-approved");
   });
 
+  await step("the solution design shows coverage, and the Solution Architect works from the approved requirements", async () => {
+    const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
+    await goto(crUrl, "!document.getElementById('design-section').hidden", "design section");
+    const summary = await text("#design-summary");
+    if (!summary.includes("Coverage: 2 of 2 confirmed requirements covered")) throw new Error("coverage missing: " + summary);
+    const items = await text("#design-items");
+    for (const id of ["CMP-001", "API-001", "SEC-001", "ADR-001"]) if (!items.includes(id)) throw new Error(`design item ${id} missing`);
+    if (!(await text("#traceability")).includes("CMP-001")) throw new Error("traceability design column empty");
+    await fill("#agent-task", "solution_architect:draft_design");
+    await waitFor("document.getElementById('agent-brief').innerText.includes('(approved)') && !document.getElementById('agent-submit').disabled", "approved requirements offered");
+    await shot("11-solution-design");
+  });
+
   await step("owner generates the executive summary and views it in a sandboxed frame", async () => {
     const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
     await goto(crUrl, "document.querySelector('#report-actions button[data-report=requirements_summary]') !== null", "report buttons");
@@ -302,7 +315,7 @@ async function main() {
     for (const expected of ["Requirements executive summary", "Next actions", "No due date set", "INC-001"]) if (!body.includes(expected)) throw new Error(`report missing ${expected}`);
     await waitFor("document.getElementById('provenance').innerText.includes('Template version')", "provenance shown");
     await new Promise((resolve) => setTimeout(resolve, 500));
-    await shot("11-report");
+    await shot("12-report");
   });
 
   await step("an incident is resolved with a root-cause analysis and closed by someone else", async () => {
@@ -328,7 +341,7 @@ async function main() {
     await fill("#close-evidence", "Version 1 was drafted successfully afterwards");
     await click("#close-form button[type=submit]");
     await waitFor("document.querySelector('#status .badge').innerText.toLowerCase() === 'closed'", "closed");
-    await shot("12-incident-closed");
+    await shot("13-incident-closed");
   });
 
   await step("project page lists the approved document and the audit page loads", async () => {

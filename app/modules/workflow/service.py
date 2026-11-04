@@ -6,7 +6,7 @@ gates, compare-and-set update, a StateTransition row and an audit event, all in 
 
 import uuid
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from sqlalchemy.orm import Session
 
@@ -48,6 +48,7 @@ class WorkflowService:
         identity: IdentityService,
         decisions: DecisionsService,
         open_questions: Callable[[uuid.UUID], int] | None = None,
+        exit_checks: Mapping[str, Callable[[uuid.UUID], list[str]]] | None = None,
     ) -> None:
         """open_questions(task_id) counts open questions agent runs raised for a task (from the executions module)."""
         self._session = session
@@ -57,6 +58,7 @@ class WorkflowService:
         self._identity = identity
         self._decisions = decisions
         self._open_questions = open_questions
+        self._exit_checks = exit_checks or {}
 
     def open_project(self, actor: Actor, project_id: uuid.UUID) -> None:
         """Creates a phase run (and its tasks) for every defined phase. Called by the projects service."""
@@ -210,6 +212,8 @@ class WorkflowService:
                 tasks = repository.tasks_for_phase_run(self._session, run.id)
                 failures += phase_exit_failures({task.key: task.state for task in tasks})
                 failures += self._decisions.approval_gate_failures(run.project_id, definition.exit.required_approvals)
+                for name in definition.exit.checks:
+                    failures += self._exit_checks[name](run.project_id)
             return failures
 
         self._apply(actor, "phase_run", PhaseRun, run, lifecycle, request, gates)

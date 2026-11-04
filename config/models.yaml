@@ -30,6 +30,13 @@ agents:
       apply_change_request:
         max_tokens: 64000   # returns the complete set, not only the changed items
 
+  solution_architect:
+    effort: high
+    max_tokens: 24000
+    tasks:
+      draft_design:
+        max_tokens: 64000   # a full design with coverage of every requirement is long
+
 budget:
   monthly_usd: 50
 

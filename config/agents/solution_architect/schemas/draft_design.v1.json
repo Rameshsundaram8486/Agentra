@@ -1,0 +1,221 @@
+{
+  "$comment": "Output of solution_architect.draft_design. Sent to the model as the structured output format; sizes, cross-field rules, requirement IDs and refs are checked in code (app/agents/solution_architect/design.py). Item IDs, statuses and coverage are computed by the server.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "component_diagram",
+    "data_flow_diagram",
+    "items",
+    "exceptions",
+    "review_responses"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string"
+    },
+    "component_diagram": {
+      "type": "string",
+      "description": "Mermaid flowchart, no code fences."
+    },
+    "data_flow_diagram": {
+      "type": "string",
+      "description": "Mermaid flowchart or sequence diagram, no code fences."
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "exceptions": {
+      "type": "array",
+      "description": "Confirmed requirements this design does not cover, and why.",
+      "items": {
+        "$ref": "#/$defs/exception"
+      }
+    },
+    "review_responses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/review_response"
+      }
+    }
+  },
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "quote"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "A requirement ID (REQ-F-001), DEC-n or DOC-n."
+        },
+        "quote": {
+          "type": "string",
+          "description": "Exact passage from the document; empty for a requirement or decision."
+        }
+      }
+    },
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "title",
+        "description"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "exception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requirement_id",
+        "reason"
+      ],
+      "properties": {
+        "requirement_id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "review_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "response"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "REV-n."
+        },
+        "response": {
+          "type": "string"
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "kind",
+        "title",
+        "description",
+        "rationale",
+        "label",
+        "satisfies",
+        "related",
+        "unverified_capabilities",
+        "sources",
+        "suggested_answers",
+        "recommended_answer",
+        "recommendation_rationale"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "An existing design item ID to keep it, or new-1, new-2 ..."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "component",
+            "data_flow",
+            "interface",
+            "entity",
+            "security_control",
+            "environment",
+            "decision",
+            "risk",
+            "open_question"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why; required for decisions."
+        },
+        "label": {
+          "type": "string",
+          "enum": [
+            "fact",
+            "assumption",
+            "suggestion",
+            "open_question"
+          ]
+        },
+        "satisfies": {
+          "type": "array",
+          "description": "Requirement IDs it helps to meet.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "related": {
+          "type": "array",
+          "description": "Refs of design items it connects to.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unverified_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/citation"
+          }
+        },
+        "suggested_answers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/answer"
+          }
+        },
+        "recommended_answer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recommendation_rationale": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

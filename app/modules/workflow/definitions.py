@@ -98,6 +98,8 @@ class ExitRule(BaseModel):
 
     # Artifact types (config/policies/approval_matrix.yaml) whose current versions must all be approved.
     required_approvals: tuple[str, ...] = ()
+    # Named checks other modules provide (wired in app/composition.py), e.g. design_coverage.
+    checks: tuple[str, ...] = ()
 
 
 class PhaseDefinition(BaseModel):

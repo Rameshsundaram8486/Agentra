@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import case, func, select, text, update
+from sqlalchemy import case, func, select, text, tuple_, update
 from sqlalchemy.orm import Session
 
 from app.modules.executions.models import AgentRun, ModelCall
@@ -37,16 +37,16 @@ def runs_for_input(session: Session, agent_key: str, task_key: str, version_id: 
     )
 
 
-def succeeded_runs(session: Session, project_id: uuid.UUID, agent_key: str, task_keys: tuple[str, ...]) -> list[AgentRun]:
-    if not task_keys:
+def succeeded_runs(session: Session, project_id: uuid.UUID, tasks: list[tuple[str, str]]) -> list[AgentRun]:
+    """Succeeded runs of any of these (agent, task) pairs, oldest first."""
+    if not tasks:
         return []
     return list(
         session.scalars(
             select(AgentRun)
             .where(
                 AgentRun.project_id == project_id,
-                AgentRun.agent_key == agent_key,
-                AgentRun.task_key.in_(task_keys),
+                tuple_(AgentRun.agent_key, AgentRun.task_key).in_(tasks),
                 AgentRun.status == "succeeded",
             )
             .order_by(AgentRun.created_at)

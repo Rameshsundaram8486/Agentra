@@ -1,0 +1,174 @@
+{
+  "$comment": "Output of solution_architect.compare_options. Sent to the model as the structured output format; ranges, completeness of the score matrix and weighted totals are enforced and computed in code (app/agents/solution_architect/agent.py).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "criteria",
+    "options",
+    "recommended_option",
+    "recommendation_rationale",
+    "assumptions",
+    "unverified_capabilities",
+    "sources"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string"
+    },
+    "criteria": {
+      "type": "array",
+      "description": "Three to eight weighted criteria.",
+      "items": {
+        "$ref": "#/$defs/criterion"
+      }
+    },
+    "options": {
+      "type": "array",
+      "description": "Two to four options, each scored on every criterion.",
+      "items": {
+        "$ref": "#/$defs/option"
+      }
+    },
+    "recommended_option": {
+      "type": "string",
+      "description": "Key of the recommended option."
+    },
+    "recommendation_rationale": {
+      "type": "string"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "unverified_capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/citation"
+      }
+    }
+  },
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "quote"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "A requirement ID (REQ-F-001), DEC-n or DOC-n."
+        },
+        "quote": {
+          "type": "string",
+          "description": "Exact passage from the document; empty for a requirement or decision."
+        }
+      }
+    },
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "title",
+        "weight",
+        "description"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "description": "1 (minor) to 5 (decisive)."
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "criterion",
+        "score",
+        "rationale"
+      ],
+      "properties": {
+        "criterion": {
+          "type": "string",
+          "description": "Criterion key."
+        },
+        "score": {
+          "type": "integer",
+          "description": "1 (poor) to 5 (excellent)."
+        },
+        "rationale": {
+          "type": "string"
+        }
+      }
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "title",
+        "description",
+        "scores",
+        "pros",
+        "cons",
+        "risks"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/score"
+          }
+        },
+        "pros": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.guardrails.input.scope import input_problems
-from app.harness.registry import AgentRegistry, TaskDefinition
+from app.harness.registry import AgentRegistry, TaskDefinition, task_refs
 from app.infrastructure.clock import Clock
 from app.infrastructure.job_queue import JobQueue
 from app.model_gateway.errors import BudgetExceededError
@@ -101,6 +101,8 @@ class ExecutionsService:
         if record.project_id != project_id:
             raise NotFoundError("Document version not found")
         problems = input_problems(record, project_id, task.spec.input_artifact_types)
+        if task.spec.input_must_be_approved and self._decisions.approval_statuses([record.id])[record.id] != "approved":
+            problems.append(f"'{record.artifact_title}' v{record.version_no} is not approved yet; this task builds on an approved version")
         agent, blockers = self._readiness(project_id, task)
         if problems or blockers:
             raise ValidationFailedError(f"The {task.agent_name} cannot start yet: {'; '.join(problems + blockers)}")
@@ -443,7 +445,7 @@ class ExecutionsService:
             for record in sorted(self._artifacts.current_records_of_type(project_id, artifact_type), key=lambda r: r.artifact_title)
         ]
         decision_ids: list[str] = []
-        for run in repository.succeeded_runs(self._session, project_id, task.agent_key, task.spec.context_decisions_from):
+        for run in repository.succeeded_runs(self._session, project_id, task_refs(task.agent_key, task.spec.context_decisions_from)):
             decision_ids += [value for value in (run.output or {}).get("decision_ids", []) if value not in decision_ids]
         decisions = [
             {"id": value, "outcomes": len(self._decisions.get_decision(actor, uuid.UUID(value)).outcomes)} for value in decision_ids

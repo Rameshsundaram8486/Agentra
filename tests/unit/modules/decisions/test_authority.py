@@ -67,7 +67,7 @@ def test_change_request_roles_must_be_distinct_human_roles(roles: list[str]) -> 
 
 def test_both_owner_and_customer_approver_must_approve_a_change_request() -> None:
     assert MATRIX.change_requests.required_roles == ("owner", "customer_approver")
-    assert MATRIX.baselines == {"requirements_baseline"}
+    assert MATRIX.baselines == {"requirements_baseline", "design_baseline"}
 
 
 @pytest.mark.parametrize("kind", ["agent", "system"])

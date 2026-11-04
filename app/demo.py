@@ -3,7 +3,7 @@
 Creates, if missing:
 - the project (default code DEMO-LEAVE) owned by the demo admin, who also holds the reviewer and
   customer_approver roles on THIS project only, so one login can review, approve and sign off UAT
-- the Business Analyst agent service account, as the project's agent
+- the Business Analyst and Solution Architect agent service accounts, as the project's agents
 - a demo author (project manager) so there is someone other than the admin to write documents:
   nobody may approve a document they authored
 - a synthetic project brief written by the demo author, and Phase 7 moved to in progress, so the Business
@@ -56,6 +56,7 @@ before payroll.
 - Arabic and English are both used in the company.
 """
 DEMO_PHASE = 7
+AGENTS = (("business_analyst", "Business Analyst Agent"), ("solution_architect", "Solution Architect Agent"))
 
 
 def _ensure_user(services: Services, email: str, create: Callable[[], object]) -> Actor:
@@ -97,16 +98,10 @@ def seed_demo(
     for role in ("reviewer", "customer_approver"):
         _ensure_role(services, admin, project.id, admin_email, role)
 
-    agent = services.identity.agent_by_key("business_analyst")
-    if agent is None:
-        services.identity.create_user(
-            SYSTEM_ACTOR,
-            email="business_analyst@agents.agentra.local",
-            display_name="Business Analyst Agent",
-            kind="agent",
-            agent_key="business_analyst",
-        )
-    _ensure_role(services, admin, project.id, "business_analyst@agents.agentra.local", "agent")
+    for key, name in AGENTS:
+        if services.identity.agent_by_key(key) is None:
+            services.identity.create_user(SYSTEM_ACTOR, email=f"{key}@agents.agentra.local", display_name=name, kind="agent", agent_key=key)
+        _ensure_role(services, admin, project.id, f"{key}@agents.agentra.local", "agent")
 
     _ensure_user(
         services,
@@ -145,7 +140,7 @@ def seed_demo(
     return [
         f"{'Created' if created else 'Found'} demo project {project.code} ({project.id})",
         f"{admin_email} roles on {project.code}: {', '.join(roles)}",
-        "Business Analyst Agent is the project's agent",
+        "Business Analyst Agent and Solution Architect Agent are the project's agents",
         f"{author_email} is the project's project manager (writes documents for the admin to review)",
         f"{customer_email} is a customer approver (the second approval a change request needs)",
         f"Project brief '{DEMO_BRIEF_TITLE}' is on the project; Phase {DEMO_PHASE} is {(phase_state or '').replace('_', ' ')}",

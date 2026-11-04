@@ -171,3 +171,45 @@ def test_business_analyst_answers_a_review_and_applies_a_change_request(
     changed = next(i for i in third.items if i.item_id == target)
     print(f"v{third.version_no} applies {third.change_request}: {target} now reads: {changed.statement}")
     assert third.change_request == "CR-001" and third.version_no == 3
+
+
+def test_solution_architect_compares_options_and_drafts_a_covering_design(
+    phase8: Team, run: Callable[..., Any], test_settings: Settings,
+    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore,
+) -> None:
+    """Two real calls on small synthetic requirements (drafted by the scripted model): compare options, then design."""
+    from app.modules.decisions.service import DecisionOutcomeCreate
+    from tests.agent_support import move_task, phase_task
+
+    if test_settings.anthropic_api_key is None:
+        pytest.fail("ANTHROPIC_API_KEY is not set in .env")
+    runner = AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, AnthropicProvider(test_settings.anthropic_api_key.get_secret_value())))
+    team = phase8
+    requirements = run(lambda s: s.requirements.view(team.owner.actor, team.project.id))
+
+    def go(task_key: str) -> Any:
+        data = AgentRunCreate(agent_key="solution_architect", task_key=task_key, artifact_version_id=requirements.version_id)
+        queued = run(lambda s: s.executions.request_run(team.pm.actor, team.project.id, data)).run
+        runner.handle(ClaimedJob(uuid.uuid4(), "agent_run", {"agent_run_id": str(queued.id)}, "live", 1))
+        detail = run(lambda s: s.executions.get_run(team.owner.actor, queued.id))
+        call = detail.model_calls[0] if detail.model_calls else None
+        print(f"\n{task_key}: status={detail.status} cost=${detail.cost_usd} out_tokens={call.output_tokens if call else '-'} latency={call.latency_ms if call else '-'}ms")
+        for finding in detail.findings:
+            print(f"  finding: {finding.severity} {finding.check} {finding.path}: {finding.message}")
+        assert detail.status == "succeeded", f"{detail.error_code}: {detail.error_message}"
+        return detail
+
+    compared = go("compare_options")
+    decision = next(d for d in run(lambda s: s.decisions.list_decisions(team.owner.actor, team.project.id)) if d.title == "Architecture option")
+    print(f"options: {[(o.key, o.title) for o in decision.options]} recommended={decision.recommended_option} scores={compared.output['weighted_scores']}")
+    run(lambda s: s.decisions.record_outcome(team.owner.actor, decision.id, DecisionOutcomeCreate(action="accept")))
+    move_task(run, team.pm.actor, phase_task(run, team, "compare_options", phase=8), "completed")
+
+    go("draft_design")
+    design = run(lambda s: s.design.view(team.owner.actor, team.project.id))
+    print(f"design v{design.version_no}: {len(design.items)} items {design.counts}; coverage {design.coverage.covered}/{design.coverage.confirmed}, "
+          f"excepted {design.coverage.excepted}, gaps {design.coverage.gaps}")
+    for item in design.items:
+        flags = "; ".join(f.message for f in item.quality_flags)
+        print(f"- {item.item_id} [{item.kind}/{item.status}] {item.title} -> {', '.join(item.satisfies) or '-'}" + (f"  <{flags}>" if flags else ""))
+    assert design.coverage.gaps == [] and any(i.kind == "security_control" for i in design.items)

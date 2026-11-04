@@ -27,7 +27,7 @@ from app.modules.identity.service import Actor
 from app.modules.projects.service import ProjectCreate
 from app.modules.requirements.service import ChangeRequestCreate
 from app.modules.workflow.service import TransitionRequest
-from tests.agent_support import BRIEF, DISCOVERY_NOTES, ba_json, draft_items, draft_json, process
+from tests.agent_support import BRIEF, DISCOVERY_NOTES, ba_json, compare_output, design_json, draft_items, draft_json, process
 from tests.support import make_docx
 
 suffix = uuid.uuid4().hex[:6]
@@ -44,15 +44,18 @@ for email, name, admin in users.values():
         sys.exit(1)
 
 AGENT_EMAIL = "business_analyst@agents.agentra.local"
-with contextlib.redirect_stderr(io.StringIO()):  # "already exists" is fine: the account is shared by every run
+SA_EMAIL = "solution_architect@agents.agentra.local"
+with contextlib.redirect_stderr(io.StringIO()):  # "already exists" is fine: the accounts are shared by every run
     main(["create-agent", "--key", "business_analyst", "--name", "Business Analyst Agent"])
+    main(["create-agent", "--key", "solution_architect", "--name", "Solution Architect Agent"])
 
 docx_path = Path(sys.argv[1]).with_name("discovery-notes.docx")
 docx_path.write_bytes(make_docx("Discovery notes", "Leave approvals happen weekly."))
 
 
 def change_control_project() -> str:
-    """Brief clarified; a failed draft (INC-001) then a good one, approved; CR-001 raised by the PM and still open."""
+    """Brief clarified; a failed draft (INC-001) then a good one, approved; CR-001 raised and still open; Phase 7
+    completed; Phase 8 options compared and chosen, design drafted and waiting for review."""
     settings = get_settings()
     policies = load_policies(min_password_length=settings.min_password_length)
     engine = create_db_engine(settings.database_url.get_secret_value())
@@ -116,6 +119,38 @@ def change_control_project() -> str:
         title="Add half-day leave", reason="HR asked for half days", change="Allow half-day requests",
         impact="About two days of build", affected_item_ids=["REQ-F-001"],
     )))
+
+    # Phase 7 completed; Phase 8: options compared and chosen, design drafted (waiting for review).
+    move(pm, "phase", 7, "waiting_for_review")
+    move(reviewer, "phase", 7, "completed")
+    run(lambda s: s.identity.add_member(admin, project.id, SA_EMAIL, "agent"))
+
+    def move8(who: Actor, kind: str, key: str | int, state: str) -> None:
+        def step(s: Services) -> None:
+            phase = next(p for p in s.workflow.list_phase_runs(admin, project.id) if p.phase == 8)
+            if kind == "phase":
+                s.workflow.transition_phase_run(who, phase.id, TransitionRequest(to_state=state, reason="UI seed", expected_version=phase.version))
+            else:
+                task = next(t for t in phase.tasks if t.key == key)
+                s.workflow.transition_task(who, task.id, TransitionRequest(to_state=state, reason="UI seed", expected_version=task.version))
+
+        run(step)
+
+    move8(admin, "phase", 8, "ready")
+    move8(pm, "phase", 8, "in_progress")
+    requirements_version = run(lambda s: s.requirements.view(admin, project.id)).version_id
+
+    def ask_architect(task_key: str) -> None:
+        data = AgentRunCreate(agent_key="solution_architect", task_key=task_key, artifact_version_id=requirements_version)
+        process(runner, run(lambda s: s.executions.request_run(pm, project.id, data)).run.id)
+
+    model.add(fake_response(json.dumps(compare_output())))
+    ask_architect("compare_options")
+    option = next(d for d in run(lambda s: s.decisions.list_decisions(admin, project.id)) if d.title == "Architecture option")
+    run(lambda s: s.decisions.record_outcome(admin, option.id, DecisionOutcomeCreate(action="accept")))
+    move8(pm, "task", "compare_options", "completed")
+    model.add(fake_response(design_json()))
+    ask_architect("draft_design")
     engine.dispose()
     return str(project.id)
 

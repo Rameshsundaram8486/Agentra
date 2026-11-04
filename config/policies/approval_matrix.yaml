@@ -52,7 +52,7 @@ artifact_types:
 decisions:
   decider_roles: [owner, project_manager]
 
-baselines: [requirements_baseline]
+baselines: [requirements_baseline, design_baseline]
 
 change_requests:
   required_roles: [owner, customer_approver]

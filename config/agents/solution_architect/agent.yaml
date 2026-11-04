@@ -1,2 +1,48 @@
-# Solution Architect Agent: architecture and technical design (Phase 8; consulted 7, 9). Defines: mission, phases, tools, permissions, risk class, autonomy level, effort, escalation, completion criteria.
-# Scaffold only: not implemented yet.
+# Solution Architect Agent: architecture and technical design (Phase 8; consulted 7, 9).
+# Loaded by app/harness/registry.py; the code for each task is in app/agents/solution_architect/.
+# Model, effort and token limits are in config/models.yaml. Agents draft and ask; people decide and approve.
+version: 1
+key: solution_architect
+name: Solution Architect Agent
+mission: >
+  Turn the approved requirements into a reviewed technical solution: compare options against stated criteria
+  for people to choose from, then design components, data flows, interfaces, data, security and deployment,
+  with every confirmed requirement covered or an exception documented.
+phases: [8]
+autonomy: supervised
+risk_class: low
+
+tasks:
+  compare_options:
+    title: Compare solution options
+    description: >
+      Compares two to four solution options against weighted criteria drawn from the approved requirements and
+      the team's earlier decisions, and asks the project team to choose one.
+    phase: 8
+    workflow_task: compare_options
+    phase_states: [in_progress, waiting_for_input]
+    input_artifact_types: [requirements_baseline]
+    input_must_be_approved: true
+    context_artifact_types: [project_brief, source_document]
+    context_decisions_from: [business_analyst.clarify_brief, business_analyst.draft_requirements]
+    prompt: prompts/compare_options.v1.md
+    output_schema: schemas/compare_options.v1.json
+    max_attempts: 2
+
+  draft_design:
+    title: Draft the design
+    description: >
+      Drafts the solution design (components, data flows, interfaces, data model, security controls,
+      environments, architecture decisions, risks and open questions) on the chosen option, mapping every
+      confirmed requirement to the design or documenting why not.
+    phase: 8
+    workflow_task: draft_design
+    phase_states: [in_progress, waiting_for_input]
+    input_artifact_types: [requirements_baseline]
+    input_must_be_approved: true
+    context_artifact_types: [project_brief, source_document]
+    context_decisions_from: [business_analyst.clarify_brief, business_analyst.draft_requirements, compare_options, draft_design]
+    context_reviews_of: [design_baseline]
+    prompt: prompts/draft_design.v1.md
+    output_schema: schemas/draft_design.v1.json
+    max_attempts: 2

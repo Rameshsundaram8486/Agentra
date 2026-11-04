@@ -1,11 +1,11 @@
-"""Requirements traceability matrix, version 1: objective <- requirement -> user stories -> acceptance criteria,
-with the sources behind each requirement. Design and test columns are filled by Phases 8 and 10.
+"""Requirements traceability matrix: objective <- requirement -> user stories -> acceptance criteria -> design
+items, with the sources behind each requirement. The design column comes from Phase 8, tests from Phase 10.
 Built only from stored items; the same items always give the same rows and the same CSV.
 """
 
 import csv
 import io
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from app.modules.requirements.schemas import RequirementItemView, TraceRow, TraceabilityView
 
@@ -24,7 +24,8 @@ def _source(item: RequirementItemView) -> list[str]:
     return out
 
 
-def build_rows(items: Sequence[RequirementItemView]) -> tuple[list[TraceRow], list[str]]:
+def build_rows(items: Sequence[RequirementItemView], design: Mapping[str, list[str]] | None = None) -> tuple[list[TraceRow], list[str]]:
+    """design: requirement ID -> design item IDs (or an exception note) for the current design; None before there is one."""
     by_id = {item.item_id: item for item in items}
     objectives = [item for item in items if item.kind == "objective"]
     stories = [item for item in items if item.kind == "user_story"]
@@ -49,7 +50,7 @@ def build_rows(items: Sequence[RequirementItemView]) -> tuple[list[TraceRow], li
                 user_stories=linked_stories,
                 acceptance_criteria=[f"{item.item_id}.AC{n} {text}" for n, text in enumerate(item.acceptance_criteria, start=1)],
                 sources=_source(item),
-                design=NOT_YET_DESIGN,
+                design=NOT_YET_DESIGN if design is None else (", ".join(design.get(item.item_id, [])) or "Not covered"),
                 tests=NOT_YET_TESTS,
                 gaps=gaps,
             )

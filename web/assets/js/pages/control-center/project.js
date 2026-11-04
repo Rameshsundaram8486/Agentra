@@ -155,7 +155,8 @@ function runItem(run) {
     h(
       "div",
       {},
-      h("div", {}, `${run.task_title}: ${run.input_title} v${run.input_version_no}`),
+      h("div", {}, `${run.agent_name}: ${run.task_title}`),
+      h("div", { class: "muted small" }, `Works from ${run.input_title} v${run.input_version_no}`),
       run.context_documents || run.context_decisions
         ? h("div", { class: "muted small" }, `Also read ${run.context_documents} other document(s) and ${run.context_decisions} decision(s)`)
         : null,
@@ -166,6 +167,7 @@ function runItem(run) {
         ? h("div", { class: "small" }, h("a", { href: `decisions.html?id=${encodeURIComponent(projectId)}` }, `${run.decision_ids.length} question(s) are in the decision inbox`))
         : null,
       run.status === "succeeded" && run.task_key === "draft_requirements" ? h("div", { class: "small" }, "The draft is in Requirements below.") : null,
+      run.status === "succeeded" && run.task_key === "draft_design" ? h("div", { class: "small" }, "The draft is in Solution design below.") : null,
       run.error_message ? h("div", { class: "small" }, run.error_message) : null,
       blocking.length ? h("ul", { class: "bullets small" }, blocking.map((finding) => h("li", {}, finding.path ? `${finding.path}: ${finding.message}` : finding.message))) : null,
       warnings.length ? h("div", { class: "muted small" }, `Noted: ${warnings.map((finding) => finding.message).join("; ")}`) : null,
@@ -266,7 +268,7 @@ async function loadTraceability() {
   if (!matrix) return;
   document.getElementById("traceability-csv").href = `/api/projects/${encodeURIComponent(projectId)}/requirements/traceability.csv`;
   document.getElementById("traceability-gaps").replaceChildren(
-    h("p", { class: "muted small" }, `Version ${matrix.version_no} (${humanise(matrix.approval_status)}). Design and test columns fill in during Phases 8 and 10.`),
+    h("p", { class: "muted small" }, `Version ${matrix.version_no} (${humanise(matrix.approval_status)}). The design column comes from the current solution design (Phase 8); tests fill in during Phase 10.`),
     h(
       "div",
       { class: "small" },
@@ -477,12 +479,59 @@ async function enableReports(canGenerate) {
   );
 }
 
+// Solution design ---------------------------------------------------------------------------
+
+async function loadDesign() {
+  const view = await api(`/api/projects/${encodeURIComponent(projectId)}/design`);
+  const section = document.getElementById("design-section");
+  section.hidden = !view;
+  if (!view) return;
+  const coverage = view.coverage;
+  const parts = [
+    h(
+      "div",
+      { class: "section-header" },
+      h("a", { class: "primary", href: `artifact.html?id=${encodeURIComponent(view.artifact_id)}` }, `${view.artifact_title} v${view.version_no}`),
+      statusBadge(view.approval_status),
+    ),
+    view.stale ? h("div", { class: "alert alert-error", role: "alert" }, `${view.stale_reason}. Ask the Solution Architect to redraft it against the approved requirements.`) : null,
+    view.locked && !view.stale ? h("p", { class: "small" }, "Approved design, under change control.") : null,
+    h("p", { class: "muted small" }, `Designed against requirements v${view.requirements_version_no}. ${view.counts.confirmed} confirmed, ${view.counts.proposed} proposed, ${view.counts.open} open.`),
+    h("p", {}, view.summary),
+    h(
+      "p",
+      { class: coverage.gaps.length ? "small" : "muted small" },
+      `Coverage: ${coverage.covered} of ${coverage.confirmed} confirmed requirements covered; ${coverage.excepted} with a documented exception` +
+        (coverage.gaps.length ? `; not covered: ${coverage.gaps.join(", ")} (Phase 8 cannot complete until they are).` : "."),
+    ),
+    ...view.review_responses.map((r) => h("div", { class: "small" }, `Review comment "${r.comment}": ${r.response}`)),
+    ...flagLines(view.set_flags),
+  ];
+  document.getElementById("design-summary").replaceChildren(...parts.filter(Boolean));
+  const rows = view.items.map((item) =>
+    h(
+      "tr",
+      {},
+      h("td", { class: "num" }, item.item_id),
+      h("td", {}, h("div", { class: "primary" }, item.title), h("div", { class: "sub" }, item.description), ...flagLines(item.quality_flags)),
+      h("td", { class: "small" }, humanise(item.kind), item.related.length ? h("div", { class: "sub" }, `With ${item.related.join(", ")}`) : null),
+      h("td", { class: "small" }, item.satisfies.join(", ") || "-"),
+      h("td", {}, statusBadge(item.status)),
+    ),
+  );
+  document.getElementById("design-items").replaceChildren(
+    h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "ID"), h("th", {}, "Design item"), h("th", {}, "Kind"), h("th", {}, "Satisfies"), h("th", {}, "Status"))), h("tbody", {}, rows)),
+  );
+  document.getElementById("component-diagram").textContent = view.component_diagram || "None.";
+  document.getElementById("data-flow-diagram").textContent = view.data_flow_diagram || "None.";
+}
+
 async function refreshAfterRun() {
   await Promise.all([
     loadPhases(),
     loadDecisionSummary(),
     canViewIncidents ? loadIncidents() : Promise.resolve(),
-    loadRequirements().then(() => Promise.all([loadTraceability(), loadChangeRequests()])),
+    loadRequirements().then(() => Promise.all([loadTraceability(), loadChangeRequests(), loadDesign()]).then(fillInputs)),
     loadDocuments().then((artifacts) => fillBriefs(artifacts)),
   ]);
 }
@@ -546,26 +595,54 @@ function enableUpload() {
 
 // Agent ----------------------------------------------------------------------------------------
 
-function fillBriefs(artifacts) {
-  const briefs = artifacts.filter((artifact) => artifact.artifact_type === "project_brief");
+// Each task and what it works from: a project brief (Phase 7) or the approved requirements (Phase 8).
+const AGENT_TASKS = [
+  { agent: "business_analyst", task: "clarify_brief", label: "Business Analyst: ask about the brief", input: "brief" },
+  { agent: "business_analyst", task: "draft_requirements", label: "Business Analyst: draft the requirements", input: "brief" },
+  { agent: "solution_architect", task: "compare_options", label: "Solution Architect: compare solution options", input: "requirements" },
+  { agent: "solution_architect", task: "draft_design", label: "Solution Architect: draft the design", input: "requirements" },
+];
+let projectBriefs = [];
+
+function selectedTask(form) {
+  return AGENT_TASKS.find((t) => `${t.agent}:${t.task}` === control(form, "task_key").value) ?? AGENT_TASKS[0];
+}
+
+function fillInputs() {
   const form = document.getElementById("agent-form");
-  form.artifact_version_id.replaceChildren(
-    ...briefs.map((brief) => h("option", { value: brief.current_version.id }, `${brief.title} (v${brief.current_version_no})`)),
-  );
-  return briefs;
+  const hint = document.getElementById("agent-no-brief");
+  const choice = selectedTask(form);
+  let options = [];
+  let missing = "";
+  if (choice.input === "brief") {
+    options = projectBriefs.map((brief) => h("option", { value: brief.current_version.id }, `${brief.title} (v${brief.current_version_no})`));
+    missing = "Add a document of type Project brief first; the agent works from it.";
+  } else if (currentRequirements && currentRequirements.approval_status === "approved") {
+    options = [h("option", { value: currentRequirements.version_id }, `${currentRequirements.artifact_title} v${currentRequirements.version_no} (approved)`)];
+  } else {
+    missing = "The Solution Architect works from approved requirements; approve the requirements first.";
+  }
+  form.artifact_version_id.replaceChildren(...options);
+  hint.textContent = missing;
+  hint.hidden = options.length > 0;
+  document.getElementById("agent-submit").disabled = options.length === 0;
+}
+
+function fillBriefs(artifacts) {
+  projectBriefs = artifacts.filter((artifact) => artifact.artifact_type === "project_brief");
+  fillInputs();
+  return projectBriefs;
 }
 
 function enableAgent(artifacts, canRun) {
   document.getElementById("agent-section").hidden = false;
   if (!canRun) return;
-  const briefs = fillBriefs(artifacts);
-  if (briefs.length === 0) {
-    document.getElementById("agent-no-brief").hidden = false;
-    return;
-  }
   const form = document.getElementById("agent-form");
   const message = document.getElementById("agent-error");
   const submit = document.getElementById("agent-submit");
+  control(form, "task_key").replaceChildren(...AGENT_TASKS.map((t) => h("option", { value: `${t.agent}:${t.task}` }, t.label)));
+  control(form, "task_key").addEventListener("change", fillInputs);
+  fillBriefs(artifacts);
   form.hidden = false;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -574,7 +651,7 @@ function enableAgent(artifacts, canRun) {
     try {
       const result = await api(`/api/projects/${encodeURIComponent(projectId)}/agent-runs`, {
         method: "POST",
-        body: { agent_key: "business_analyst", task_key: control(form, "task_key").value, artifact_version_id: form.artifact_version_id.value },
+        body: { agent_key: selectedTask(form).agent, task_key: selectedTask(form).task, artifact_version_id: form.artifact_version_id.value },
       });
       if (!result.created) {
         message.className = "alert alert-info";
@@ -711,7 +788,7 @@ startPage(async () => {
   if (can("artifact.view")) {
     await loadRequirements();
     enableChangeRequests();
-    await Promise.all([loadTraceability(), loadChangeRequests()]);
+    await Promise.all([loadTraceability(), loadChangeRequests(), loadDesign()]);
   }
   if (can("agent_run.view")) {
     enableAgent(artifacts, can("agent.run"));
