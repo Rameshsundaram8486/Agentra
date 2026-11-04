@@ -1,7 +1,8 @@
 # Standard task lifecycle. Same states as phases; agents start and submit their own work.
 # Gates checked in code (app/modules/workflow/gates.py):
 #   - to in_progress: the phase is in_progress and every task in depends_on is completed
-#   - to completed: every artifact type in the task's required_approvals is approved at its current version
+#   - to completed: every artifact type in the task's required_approvals is approved at its current version,
+#     and, with requires_answered_questions, no question an agent raised for the task is still open
 # Agents may move only tasks assigned to them (task.agent), whatever the role allows.
 key: standard_task
 version: 1
@@ -16,7 +17,7 @@ transitions:
   - {from: waiting_for_input, to: in_progress, roles: [owner, project_manager]}
   - {from: waiting_for_input, to: completed, roles: [owner, project_manager]}  # the answers are enough to go on
   - {from: in_progress, to: waiting_for_review, roles: [agent, project_manager]}
-  - {from: waiting_for_review, to: changes_requested, roles: [reviewer, owner]}
+  - {from: waiting_for_review, to: changes_requested, roles: [reviewer, owner, system]}  # system: a reviewer requested changes on the document
   - {from: waiting_for_review, to: completed, roles: [reviewer, owner]}
   - {from: changes_requested, to: in_progress, roles: [agent, project_manager]}
   - {from: [ready, in_progress, waiting_for_input, waiting_for_review, changes_requested], to: blocked, roles: [owner, project_manager, agent, system]}

@@ -14,30 +14,15 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.harness.runner import AgentRunner
 from app.model_gateway.providers.fake import FakeProvider, fake_response
-from app.modules.artifacts.service import ArtifactCreate
 from app.modules.decisions.service import ApprovalCreate, DecisionOutcomeCreate
 from app.modules.errors import InvalidTransitionError
-from app.modules.executions.schemas import AgentRunCreate
-from app.modules.workflow.service import TransitionRequest
-from tests.agent_support import DISCOVERY_NOTES, ba_json, draft_items, draft_json, process, req
+from tests.agent_support import ask, draft_items, draft_json, move_task, phase_task, process, req
 from tests.support import Team, make_docx, make_pdf
 
 Run = Callable[..., Any]
 
 
-def _ask(run: Run, team: Team, task_key: str, version_id: uuid.UUID, actor: Any = None) -> Any:
-    data = AgentRunCreate(agent_key="business_analyst", task_key=task_key, artifact_version_id=version_id)
-    return run(lambda s: s.executions.request_run(actor or team.pm.actor, team.project.id, data))
-
-
-def _task(run: Run, team: Team, key: str) -> Any:
-    phase = next(p for p in run(lambda s: s.workflow.list_phase_runs(team.owner.actor, team.project.id)) if p.phase == 7)
-    return next(t for t in phase.tasks if t.key == key)
-
-
-def _move_task(run: Run, actor: Any, task: Any, to_state: str) -> Any:
-    request = TransitionRequest(to_state=to_state, reason="Test step", expected_version=task.version)
-    return run(lambda s: s.workflow.transition_task(actor, task.id, request))
+_ask, _task, _move_task = ask, phase_task, move_task
 
 
 def _detail(run: Run, team: Team, run_id: uuid.UUID) -> Any:
@@ -46,28 +31,6 @@ def _detail(run: Run, team: Team, run_id: uuid.UUID) -> Any:
 
 def _requirements(run: Run, team: Team) -> Any:
     return run(lambda s: s.requirements.view(team.owner.actor, team.project.id))
-
-
-@pytest.fixture
-def clarified(
-    ba_team: Team, make_brief: Callable[..., Any], run: Run, runner_for: Callable[..., AgentRunner], model: FakeProvider
-) -> tuple[Team, Any]:
-    """The brief was clarified: the stack decision answered, the others left open, and the task closed."""
-    team = ba_team
-    brief = make_brief(team)
-    run(lambda s: s.artifacts.create_artifact(
-        team.pm.actor, team.project.id, ArtifactCreate(artifact_type="source_document", title="Discovery notes", content=DISCOVERY_NOTES)
-    ))
-    queued = _ask(run, team, "clarify_brief", brief.id).run
-    model.add(fake_response(ba_json()))
-    process(runner_for(), queued.id)
-    assert _task(run, team, "clarify_brief").state == "waiting_for_input"
-
-    stack = next(d for d in run(lambda s: s.decisions.list_decisions(team.owner.actor, team.project.id)) if d.title == "Technology stack")
-    run(lambda s: s.decisions.record_outcome(team.owner.actor, stack.id, DecisionOutcomeCreate(action="accept")))
-    _move_task(run, team.pm.actor, _task(run, team, "clarify_brief"), "completed")
-    model.requests.clear()
-    return team, brief
 
 
 def test_draft_becomes_items_with_server_ids_and_derived_statuses(
@@ -151,7 +114,7 @@ def test_a_revision_keeps_ids_and_never_reuses_a_removed_one(
     assert view.version_no == 2
     assert [i.item_id for i in view.items] == ["OBJ-001", "STK-001", "REQ-F-001", "REQ-F-002", "ASM-001", "REQ-F-004"]
     assert view.added == ["REQ-F-004"] and view.removed == ["Q-001", "REQ-F-003"]
-    assert "STK-001 [stakeholder, fact] Line managers" in model.requests[-1].user  # current items were shown to it
+    assert "STK-001 [stakeholder, fact, priority not_set] Line managers" in model.requests[-1].user  # current items were shown to it
     assert _task(run, team, "draft_requirements").state == "waiting_for_review"  # no open questions this time
 
 
@@ -249,7 +212,7 @@ def test_review_completes_the_task_only_after_approval_and_an_approved_baseline_
     assert _requirements(run, team).approval_status == "approved"
 
     problem = run(lambda s: s.requirements.baseline_problem(team.project.id))
-    assert "approved; changing it needs a change request" in problem
+    assert "approved and under change control; raise a change request" in problem
 
 
 def test_requirement_records_cannot_be_edited_in_place(

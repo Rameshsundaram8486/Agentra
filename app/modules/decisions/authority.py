@@ -31,12 +31,20 @@ class DecisionPolicy(BaseModel):
     decider_roles: frozenset[str]
 
 
+class ChangeRequestPolicy(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    required_roles: tuple[str, ...]
+
+
 class ApprovalMatrix(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     version: int
     artifact_types: dict[str, ArtifactTypePolicy]
     decisions: DecisionPolicy
+    baselines: frozenset[str] = frozenset()
+    change_requests: ChangeRequestPolicy
 
     @model_validator(mode="after")
     def _humans_only(self) -> "ApprovalMatrix":
@@ -47,6 +55,12 @@ class ApprovalMatrix(BaseModel):
                 raise ValueError(f"artifact type '{name}': approver roles must be human project roles")
         if not self.decisions.decider_roles or not self.decisions.decider_roles <= _HUMAN_ROLES:
             raise ValueError("decision decider roles must be human project roles")
+        roles = self.change_requests.required_roles
+        if not roles or not set(roles) <= _HUMAN_ROLES or len(set(roles)) != len(roles):
+            raise ValueError("change request required_roles must be distinct human project roles")
+        unknown = self.baselines - set(self.artifact_types)
+        if unknown:
+            raise ValueError(f"baselines name unknown artifact types {sorted(unknown)}")
         return self
 
     def artifact_type(self, name: str) -> ArtifactTypePolicy | None:

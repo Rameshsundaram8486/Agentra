@@ -31,11 +31,13 @@ from app.main import create_app
 from app.model_gateway.gateway import ModelGateway
 from app.model_gateway.providers.fake import FakeProvider
 from app.modules.artifacts.service import ArtifactCreate
-from app.modules.decisions.service import ApprovalCreate
+from app.model_gateway.providers.fake import fake_response
+from app.modules.decisions.service import ApprovalCreate, DecisionOutcomeCreate
+from app.modules.errors import InvalidTransitionError
 from app.modules.identity.service import SYSTEM_ACTOR, Actor
 from app.modules.projects.service import ProjectCreate, ProjectView
 from app.modules.workflow.service import TransitionRequest
-from tests.agent_support import BRIEF
+from tests.agent_support import BRIEF, DISCOVERY_NOTES, ask, ba_json, move_task, phase_task, process
 from tests.support import DEFAULT_PASSWORD, Team, TestUser, alembic_config
 
 
@@ -313,6 +315,33 @@ def runner_for(
         return AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, model))
 
     return _runner
+
+
+@pytest.fixture
+def clarified(
+    ba_team: Team, make_brief: Callable[..., Any], run: Callable[..., Any], runner_for: Callable[..., AgentRunner], model: FakeProvider
+) -> tuple[Team, Any]:
+    """The brief was clarified (stack decision answered, the other questions deferred, task closed), with
+    synthetic discovery notes as a source document. Returns (team, brief version)."""
+    team = ba_team
+    brief = make_brief(team)
+    run(lambda s: s.artifacts.create_artifact(
+        team.pm.actor, team.project.id, ArtifactCreate(artifact_type="source_document", title="Discovery notes", content=DISCOVERY_NOTES)
+    ))
+    model.add(fake_response(ba_json()))
+    process(runner_for(), ask(run, team, "clarify_brief", brief.id).run.id)
+    assert phase_task(run, team, "clarify_brief").state == "waiting_for_input"
+
+    stack = next(d for d in run(lambda s: s.decisions.list_decisions(team.owner.actor, team.project.id)) if d.title == "Technology stack")
+    run(lambda s: s.decisions.record_outcome(team.owner.actor, stack.id, DecisionOutcomeCreate(action="accept")))
+    with pytest.raises(InvalidTransitionError, match="3 question\\(s\\) the agent raised are still open"):
+        move_task(run, team.pm.actor, phase_task(run, team, "clarify_brief"), "completed")
+    for decision in run(lambda s: s.decisions.list_decisions(team.owner.actor, team.project.id)):
+        if decision.status == "open":
+            run(lambda s, d=decision: s.decisions.record_outcome(team.owner.actor, d.id, DecisionOutcomeCreate(action="defer", comment="Later")))
+    move_task(run, team.pm.actor, phase_task(run, team, "clarify_brief"), "completed")
+    model.requests.clear()
+    return team, brief
 
 
 @pytest.fixture

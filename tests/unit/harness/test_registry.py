@@ -12,7 +12,7 @@ REGISTRY = load_registry(CONFIG_DIR / "agents")
 
 def test_only_defined_agents_are_loaded_and_scaffolds_are_skipped() -> None:
     assert set(REGISTRY.agents) == {"business_analyst"}
-    assert set(REGISTRY.tasks) == {("business_analyst", "clarify_brief"), ("business_analyst", "draft_requirements")}
+    assert {task for _, task in REGISTRY.tasks} == {"clarify_brief", "draft_requirements", "apply_change_request"}
     task = REGISTRY.task("business_analyst", "clarify_brief")
     assert task is not None
     assert task.spec.input_artifact_types == ("project_brief",)

@@ -1,0 +1,192 @@
+{
+  "$comment": "Output of business_analyst.draft_requirements and apply_change_request. Sent to the model as the structured output format; size limits and cross-field rules are enforced in code (app/agents/business_analyst/draft.py). Item IDs and statuses are assigned by the server. v2 adds item links (related) and responses to review comments.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "items",
+    "process_flow_mermaid",
+    "review_responses"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "What the solution is for and what this draft covers, in a few sentences."
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "process_flow_mermaid": {
+      "type": "string",
+      "description": "A Mermaid flowchart starting with 'flowchart TD'. No code fences."
+    },
+    "review_responses": {
+      "type": "array",
+      "description": "One response per review comment (REV-n): what changed, or why nothing did. Empty when there are no review comments.",
+      "items": {
+        "$ref": "#/$defs/review_response"
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "quote"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "DOC-n or DEC-n."
+        },
+        "quote": {
+          "type": "string",
+          "description": "Exact passage from the document; empty for a decision."
+        }
+      }
+    },
+    "answer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "title",
+        "description"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Short lower_snake_case identifier, unique within the question."
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "kind",
+        "title",
+        "statement",
+        "label",
+        "priority",
+        "acceptance_criteria",
+        "sources",
+        "related",
+        "suggested_answers",
+        "recommended_answer",
+        "recommendation_rationale"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "An existing item ID to keep it, or new-1, new-2 ... for a new item."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "objective",
+            "stakeholder",
+            "functional",
+            "non_functional",
+            "user_story",
+            "business_rule",
+            "assumption",
+            "dependency",
+            "open_question"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "enum": [
+            "fact",
+            "assumption",
+            "suggestion",
+            "open_question"
+          ]
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "must",
+            "should",
+            "could",
+            "not_set"
+          ]
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/source"
+          }
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Refs of the items it traces to: a requirement to its objectives, a user story to its requirements. Empty if none."
+        },
+        "suggested_answers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/answer"
+          }
+        },
+        "recommended_answer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recommendation_rationale": {
+          "type": "string"
+        }
+      }
+    },
+    "review_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "response"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "REV-n."
+        },
+        "response": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -50,6 +50,7 @@ def _parser() -> argparse.ArgumentParser:
     demo = commands.add_parser("seed-demo", help="Create the synthetic demo project (safe to re-run)")
     demo.add_argument("--admin-email", default="admin@agentra.local", help="Existing platform admin who owns the demo")
     demo.add_argument("--author-email", default="pm@agentra.local", help="Demo project manager; prompted for a password if new")
+    demo.add_argument("--customer-email", default="customer@agentra.local", help="Demo customer approver; prompted for a password if new")
     demo.add_argument("--code", default="DEMO-LEAVE")
     return parser
 
@@ -98,6 +99,7 @@ def main(
                     services,
                     admin_email=args.admin_email,
                     author_email=args.author_email,
+                    customer_email=args.customer_email,
                     code=args.code,
                     read_password=read_password,
                 )

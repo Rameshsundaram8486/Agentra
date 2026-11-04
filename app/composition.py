@@ -55,9 +55,9 @@ def _check_cross_references(catalog: WorkflowCatalog, approvals: ApprovalMatrix,
         if task.spec.phase not in catalog.phases:
             raise AgentDefinitionError(f"{name} runs in phase {task.spec.phase}, which has no workflow definition")
         workflow_task = next((t for t in catalog.phase(task.spec.phase).tasks if t.key == task.spec.workflow_task), None)
-        if workflow_task is None or workflow_task.agent != agent_key:
+        if task.spec.workflow_task is not None and (workflow_task is None or workflow_task.agent != agent_key):
             raise AgentDefinitionError(f"{name} names workflow task '{task.spec.workflow_task}', which phase {task.spec.phase} does not assign to {agent_key}")
-        unknown = set(task.spec.context_artifact_types) - set(approvals.artifact_types)
+        unknown = set(task.spec.context_artifact_types + task.spec.context_reviews_of) - set(approvals.artifact_types)
         if unknown:
             raise AgentDefinitionError(f"{name} reads unknown context artifact types {sorted(unknown)}")
         unknown = set(task.spec.context_decisions_from) - {key for (a, key) in agents.tasks if a == agent_key}
@@ -110,7 +110,17 @@ class Services:
     @cached_property
     def artifacts(self) -> ArtifactsService:
         types = {name: policy.title for name, policy in self.policies.approvals.artifact_types.items()}
-        return ArtifactsService(self.session, self.clock, self.audit, self.identity, self.store, types)
+        return ArtifactsService(
+            self.session,
+            self.clock,
+            self.audit,
+            self.identity,
+            self.store,
+            types,
+            baselines=self.policies.approvals.baselines,
+            # Resolved lazily: the decisions service is built on top of this one.
+            approval_status=lambda version_id: self.decisions.approval_statuses([version_id])[version_id],
+        )
 
     @cached_property
     def decisions(self) -> DecisionsService:
@@ -121,7 +131,14 @@ class Services:
     @cached_property
     def workflow(self) -> WorkflowService:
         return WorkflowService(
-            self.session, self.clock, self.policies.catalog, self.audit, self.identity, self.decisions
+            self.session,
+            self.clock,
+            self.policies.catalog,
+            self.audit,
+            self.identity,
+            self.decisions,
+            # Resolved lazily: the executions service is built on top of this one.
+            open_questions=lambda task_id: self.executions.open_questions(task_id),
         )
 
     @cached_property
@@ -144,5 +161,12 @@ class Services:
     @cached_property
     def requirements(self) -> RequirementsService:
         return RequirementsService(
-            self.session, self.clock, self.audit, self.identity, self.artifacts, self.decisions, self.projects
+            self.session,
+            self.clock,
+            self.audit,
+            self.identity,
+            self.artifacts,
+            self.decisions,
+            self.projects,
+            self.policies.approvals.change_requests.required_roles,
         )

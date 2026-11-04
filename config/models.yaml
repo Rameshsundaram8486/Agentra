@@ -27,6 +27,8 @@ agents:
     tasks:
       draft_requirements:
         max_tokens: 64000   # a full requirements set with acceptance criteria is long
+      apply_change_request:
+        max_tokens: 64000   # returns the complete set, not only the changed items
 
 budget:
   monthly_usd: 50

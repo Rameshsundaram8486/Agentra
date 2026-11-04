@@ -252,6 +252,20 @@ class DecisionsService:
         )
         return self._views([request])[0]
 
+    def approvals_by_id(self, approval_ids: Iterable[uuid.UUID]) -> list[ApprovalView]:
+        """Approval records in the given order. Callers authorise first."""
+        ids = list(approval_ids)
+        rows = {row.id: row for row in repository.approvals_by_id(self._session, ids)}
+        found = [rows[approval_id] for approval_id in ids if approval_id in rows]
+        numbers = {row.artifact_version_id: self._artifacts.version_record(row.artifact_version_id).version_no for row in found}
+        return self._approval_views(found, numbers)
+
+    def decision_statuses(self, decision_ids: Iterable[uuid.UUID]) -> dict[uuid.UUID, DecisionStatus]:
+        """open, deferred or decided per decision request. Callers authorise first."""
+        ids = list(decision_ids)
+        outcomes = repository.outcomes_for(self._session, ids)
+        return {decision_id: _status(outcomes[decision_id]) for decision_id in ids}
+
     # Helpers --------------------------------------------------------------------------------
 
     def _load(self, decision_id: uuid.UUID) -> DecisionRequest:

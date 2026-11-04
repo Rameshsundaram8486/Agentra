@@ -47,3 +47,9 @@ def outcomes_for(session: Session, request_ids: list[uuid.UUID]) -> dict[uuid.UU
     for row in rows:
         grouped[row.decision_request_id].append(row)
     return grouped
+
+
+def approvals_by_id(session: Session, approval_ids: list[uuid.UUID]) -> list[Approval]:
+    if not approval_ids:
+        return []
+    return list(session.scalars(select(Approval).where(Approval.id.in_(approval_ids))))

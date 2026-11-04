@@ -54,6 +54,10 @@ def succeeded_runs(session: Session, project_id: uuid.UUID, agent_key: str, task
     )
 
 
+def runs_for_task(session: Session, task_id: uuid.UUID) -> list[AgentRun]:
+    return list(session.scalars(select(AgentRun).where(AgentRun.task_id == task_id).order_by(AgentRun.created_at)))
+
+
 def unlinked_runs(session: Session, project_id: uuid.UUID) -> list[AgentRun]:
     return list(
         session.scalars(

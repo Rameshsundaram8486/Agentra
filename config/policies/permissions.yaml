@@ -3,6 +3,7 @@
 # Workflow state changes are authorised per transition in config/workflows/lifecycles/, and approvals and
 # decision outcomes by config/policies/approval_matrix.yaml, not here.
 # agent.run starts an agent task (a paid model call); agent_run.view shows runs, their model, cost and findings.
+# change.raise raises a change request against an approved baseline; who decides one is in approval_matrix.yaml.
 version: 1
 
 platform_admin:
@@ -15,8 +16,8 @@ platform_admin:
   - decision.view
 
 roles:
-  owner: [project.view, project.manage_members, audit.view, artifact.view, artifact.author, decision.view, decision.raise, agent.run, agent_run.view]
-  project_manager: [project.view, audit.view, artifact.view, artifact.author, decision.view, decision.raise, agent.run, agent_run.view]
+  owner: [project.view, project.manage_members, audit.view, artifact.view, artifact.author, decision.view, decision.raise, agent.run, agent_run.view, change.raise]
+  project_manager: [project.view, audit.view, artifact.view, artifact.author, decision.view, decision.raise, agent.run, agent_run.view, change.raise]
   reviewer: [project.view, audit.view, artifact.view, decision.view, agent_run.view]
   # Customer visibility is narrowed to customer-facing artifacts when the Customer Portal is built (Phase 11).
   customer_approver: [project.view, artifact.view]

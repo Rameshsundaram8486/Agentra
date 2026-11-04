@@ -69,11 +69,17 @@ Worker (app/workers/workflow_worker.py) claims the job
 | Answer the questions in the decision inbox; close the Clarify task | People | Clarify: completed |
 | Ask the agent to draft the requirements | Owner or project manager; the agent runs | Draft: in progress, then waiting for input (open questions) or waiting for review |
 | Answer its open questions and ask again; the IDs of kept items stay the same | People, then the agent | Draft: back to in progress |
+| Request changes on the document with a comment, then ask for a redraft | Reviewer, then owner or project manager | Draft: changes requested (recorded by Agentra), in progress |
 | Approve the requirements baseline version, then complete the task | Reviewer or owner (never its author) | Draft: completed, only once the current version is approved |
+| Raise a change request against the approved baseline | Owner or project manager | (no task) |
+| Approve it: one owner and one customer approver, different people, not the raiser | People | (no task) |
+| Ask the agent to apply it; approve the new version | Owner or project manager; then a reviewer | (no task; works after the phase completes too) |
 
 - **Inputs are fixed when a run is asked for:** the chosen brief version, the current source documents and the state of the decisions it reads. The same inputs never produce a second run; a changed answer or document does.
 - **Statuses are derived in code:** confirmed only for a fact backed by a quoted document or an answered decision; assumptions and suggestions are proposed; questions are open. The model never sets a status or an ID.
-- **An approved baseline is not redrafted.** Changing it will need a change request (Increment 3b).
+- **An approved baseline is under change control** (`baselines` in `approval_matrix.yaml`). Nobody can add a version directly. An approved change request can, and only through the requirements service, which checks in code that every item it does not list comes back unchanged, that only listed items are removed, and that new items appear only if allowed. The agent task runs the same check first, so a violating answer is never saved.
+- **Review comments are inputs.** A redraft reads every comment requesting changes on the current version and must answer each one; the answers are stored with the version and shown in the document.
+- **The Clarify task cannot be closed while a question it raised is still open** (answer or defer it).
 - Uploaded files are parsed on the host with size, page and decompression limits; the extracted text is what agents read and quote, and the original file is kept by its hash.
 
 ## Authorisation

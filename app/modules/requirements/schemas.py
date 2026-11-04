@@ -59,6 +59,7 @@ class QualityFlag(BaseModel):
 
 class DraftItem(BaseModel):
     ref: str = Field(description="An existing item ID to keep it, or any other key for a new item")
+    related: list[str] = Field(default_factory=list, description="Refs of other items in the draft it traces to")
     kind: Kind
     title: str
     statement: str
@@ -68,12 +69,20 @@ class DraftItem(BaseModel):
     sources: list[SourceRef] = Field(min_length=1)
 
 
+class ReviewResponse(BaseModel):
+    approval_id: uuid.UUID
+    comment: str
+    response: str
+
+
 class RequirementsDraft(BaseModel):
     summary: str
     process_flow_mermaid: str
     items: list[DraftItem] = Field(min_length=1)
     input_refs: list[str] = Field(description="The inputs it was drafted from, recorded on the document version")
     change_summary: str
+    review_responses: list[ReviewResponse] = Field(default_factory=list)
+    change_request_id: uuid.UUID | None = Field(default=None, description="Set when applying an approved change request")
 
 
 class RequirementItemView(BaseModel):
@@ -87,6 +96,7 @@ class RequirementItemView(BaseModel):
     acceptance_criteria: list[str]
     sources: list[SourceRef]
     quality_flags: list[QualityFlag]
+    related: list[str] = Field(default_factory=list)
 
 
 class RequirementsView(BaseModel):
@@ -101,6 +111,9 @@ class RequirementsView(BaseModel):
     counts: dict[str, int] = Field(description="Items per status")
     added: list[str] = Field(description="Item IDs new in this version")
     removed: list[str] = Field(description="Item IDs in the previous version but not this one")
+    review_responses: list[ReviewResponse]
+    change_request: str | None = Field(description="The change request this version applied, e.g. CR-002")
+    locked: bool = Field(description="Approved and under change control")
     items: list[RequirementItemView]
     created_at: datetime
 
@@ -108,3 +121,75 @@ class RequirementsView(BaseModel):
 class DraftResult(BaseModel):
     view: RequirementsView
     ids: dict[str, str] = Field(description="Draft ref -> assigned item ID")
+
+
+ChangeRequestStatus = Literal["open", "approved", "rejected", "applied"]
+
+
+class ChangeRequestCreate(BaseModel):
+    title: str = Field(min_length=3, max_length=200)
+    reason: str = Field(min_length=3, max_length=4000, description="Why the change is needed")
+    change: str = Field(min_length=3, max_length=8000, description="What should change")
+    impact: str = Field(min_length=3, max_length=4000, description="Effect on scope, schedule and cost")
+    affected_item_ids: list[str] = Field(default_factory=list, max_length=100)
+    allows_new_items: bool = False
+
+
+class ChangeRequestDecisionCreate(BaseModel):
+    decision: Literal["approved", "rejected"]
+    comment: str | None = Field(default=None, max_length=4000)
+
+
+class ChangeRequestEventView(BaseModel):
+    event: Literal["approved", "rejected", "applied"]
+    role: str | None
+    actor_id: uuid.UUID
+    actor_name: str | None
+    comment: str | None
+    artifact_version_id: uuid.UUID | None
+    created_at: datetime
+
+
+class ChangeRequestView(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    cr_id: str
+    baseline_artifact_id: uuid.UUID
+    baseline_version_id: uuid.UUID
+    baseline_version_no: int
+    title: str
+    reason: str
+    change: str
+    impact: str
+    affected_item_ids: list[str]
+    allows_new_items: bool
+    raised_by: uuid.UUID
+    raised_by_name: str | None
+    status: ChangeRequestStatus
+    required_roles: list[str]
+    approved_roles: list[str]
+    applied_version_no: int | None
+    events: list[ChangeRequestEventView]
+    created_at: datetime
+
+
+class TraceRow(BaseModel):
+    item_id: str
+    kind: Kind
+    title: str
+    status: Status
+    objectives: list[str]
+    user_stories: list[str]
+    acceptance_criteria: list[str] = Field(description="Numbered: REQ-F-001.AC1 ...")
+    sources: list[str]
+    design: str
+    tests: str
+    gaps: list[str]
+
+
+class TraceabilityView(BaseModel):
+    version_id: uuid.UUID
+    version_no: int
+    approval_status: str
+    rows: list[TraceRow]
+    gaps: list[str] = Field(description="Gaps across the whole set")

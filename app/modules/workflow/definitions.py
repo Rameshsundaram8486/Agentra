@@ -83,6 +83,8 @@ class TaskDefinition(BaseModel):
     depends_on: tuple[str, ...] = ()
     # Artifact types whose current versions must all be approved before the task can be completed.
     required_approvals: tuple[str, ...] = ()
+    # The questions agent runs raised for this task must all be answered or deferred before it completes.
+    requires_answered_questions: bool = False
 
 
 class EntryRule(BaseModel):

@@ -47,13 +47,16 @@ class WorkflowService:
         audit: AuditService,
         identity: IdentityService,
         decisions: DecisionsService,
+        open_questions: Callable[[uuid.UUID], int] | None = None,
     ) -> None:
+        """open_questions(task_id) counts open questions agent runs raised for a task (from the executions module)."""
         self._session = session
         self._clock = clock
         self._catalog = catalog
         self._audit = audit
         self._identity = identity
         self._decisions = decisions
+        self._open_questions = open_questions
 
     def open_project(self, actor: Actor, project_id: uuid.UUID) -> None:
         """Creates a phase run (and its tasks) for every defined phase. Called by the projects service."""
@@ -221,11 +224,16 @@ class WorkflowService:
         lifecycle = self._catalog.lifecycle(definition.task_lifecycle)
         if actor.kind == "agent" and self._identity.agent_key_of(actor) != task.agent:
             raise PermissionDeniedError("An agent may only move tasks assigned to it")
-        required = next((t.required_approvals for t in definition.tasks if t.key == task.key), ())
+        task_definition = next((t for t in definition.tasks if t.key == task.key), None)
+        required = task_definition.required_approvals if task_definition else ()
 
         def gates(_from_state: str, to_state: str) -> list[str]:
             if to_state == COMPLETED:
-                return self._decisions.approval_gate_failures(run.project_id, required)
+                failures = self._decisions.approval_gate_failures(run.project_id, required)
+                if task_definition and task_definition.requires_answered_questions and self._open_questions:
+                    if count := self._open_questions(task.id):
+                        failures.append(f"{count} question(s) the agent raised are still open; answer or defer them first")
+                return failures
             if to_state != IN_PROGRESS:
                 return []
             siblings = repository.tasks_for_phase_run(self._session, run.id)

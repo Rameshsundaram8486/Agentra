@@ -100,3 +100,74 @@ def test_business_analyst_drafts_grounded_requirements(
         flags = "; ".join(f.message for f in item.quality_flags)
         print(f"- {item.item_id} [{item.label}/{item.status}] {item.title}: {item.statement}" + (f"  <{flags}>" if flags else ""))
     assert view.counts["confirmed"] > 0 and any(item.kind == "functional" for item in view.items)
+
+
+def test_business_analyst_answers_a_review_and_applies_a_change_request(
+    ba_team: Team, make_brief: Callable[..., Any], run: Callable[..., Any], test_settings: Settings, make_user: Callable[..., Any],
+    add_member: Callable[..., None], session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore,
+) -> None:
+    """Three real calls: draft, redraft answering a reviewer's comment, and applying an approved change request."""
+    from app.demo import DEMO_BRIEF
+    from app.modules.artifacts.service import ArtifactCreate
+    from app.modules.decisions.service import ApprovalCreate
+    from app.modules.requirements.service import ChangeRequestCreate, ChangeRequestDecisionCreate
+    from tests.agent_support import DISCOVERY_NOTES, ask, move_task, phase_task
+
+    if test_settings.anthropic_api_key is None:
+        pytest.fail("ANTHROPIC_API_KEY is not set in .env")
+    runner = AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, AnthropicProvider(test_settings.anthropic_api_key.get_secret_value())))
+    team = ba_team
+    customer = make_user(name="Customer")
+    add_member(team.owner, team.project.id, customer, "customer_approver")
+    brief = make_brief(team, DEMO_BRIEF)
+    run(lambda s: s.artifacts.create_artifact(team.pm.actor, team.project.id, ArtifactCreate(artifact_type="source_document", title="Discovery notes", content=DISCOVERY_NOTES)))
+    for actor, state in ((team.owner, "ready"), (team.pm, "in_progress"), (team.pm, "waiting_for_input"), (team.pm, "completed")):
+        move_task(run, actor.actor, phase_task(run, team, "clarify_brief"), state)
+
+    def go(queued: Any) -> Any:
+        runner.handle(ClaimedJob(uuid.uuid4(), "agent_run", {"agent_run_id": str(queued.id)}, "live", 1))
+        detail = run(lambda s: s.executions.get_run(team.owner.actor, queued.id))
+        call = detail.model_calls[0] if detail.model_calls else None
+        print(f"\n{detail.task_key}: status={detail.status} cost=${detail.cost_usd} out_tokens={call.output_tokens if call else '-'} prompt={detail.prompt_version}")
+        for finding in detail.findings:
+            print(f"  finding: {finding.severity} {finding.check} {finding.path}: {finding.message}")
+        assert detail.status == "succeeded", f"{detail.error_code}: {detail.error_message}"
+        return run(lambda s: s.requirements.view(team.owner.actor, team.project.id))
+
+    first = go(ask(run, team, "draft_requirements", brief.id).run)
+    matrix = run(lambda s: s.requirements.traceability(team.owner.actor, team.project.id))
+    print(f"v{first.version_no}: {first.counts}; traced rows={len(matrix.rows)}, rows with gaps={sum(1 for r in matrix.rows if r.gaps)}, set gaps={matrix.gaps}")
+
+    def approve(version_id: Any, decision: str = "approved", comment: str | None = None) -> None:
+        run(lambda s: s.decisions.record_approval(team.reviewer.actor, version_id, ApprovalCreate(
+            decision=decision, comment=comment, content_sha256=s.artifacts.version_record(version_id).content_sha256)))
+
+    if phase_task(run, team, "draft_requirements").state == "waiting_for_input":  # open questions: answer by deferring for the test
+        from app.modules.decisions.service import DecisionOutcomeCreate
+        for d in run(lambda s: s.decisions.list_decisions(team.owner.actor, team.project.id)):
+            if d.status == "open":
+                run(lambda s, d=d: s.decisions.record_outcome(team.owner.actor, d.id, DecisionOutcomeCreate(action="defer", comment="Live test")))
+    approve(first.version_id, "changes_requested", "Add a measurable availability target for the system, and make sure every requirement traces to an objective.")
+    second = go(ask(run, team, "draft_requirements", brief.id).run)
+    print(f"v{second.version_no}: added={second.added} removed={second.removed}")
+    for response in second.review_responses:
+        print(f"  review response: {response.response}")
+    assert second.version_no == 2 and len(second.review_responses) == 1
+
+    approve(second.version_id)
+    task = phase_task(run, team, "draft_requirements")
+    if task.state == "waiting_for_input":
+        move_task(run, team.pm.actor, task, "in_progress")
+        task = move_task(run, team.pm.actor, phase_task(run, team, "draft_requirements"), "waiting_for_review")
+    move_task(run, team.reviewer.actor, phase_task(run, team, "draft_requirements"), "completed")
+    target = next(i.item_id for i in second.items if i.kind == "functional")
+    request = run(lambda s: s.requirements.raise_change_request(team.pm.actor, team.project.id, ChangeRequestCreate(
+        title="Half-day leave", reason="HR confirmed staff often take half days",
+        change=f"Change {target} so employees can request leave in half days as well as full days",
+        impact="Small: one extra option in the request form and balance calculation", affected_item_ids=[target])))
+    for approver in (team.owner, customer):
+        run(lambda s, a=approver: s.requirements.decide_change_request(a.actor, request.id, ChangeRequestDecisionCreate(decision="approved")))
+    third = go(ask(run, team, "apply_change_request", request.baseline_version_id, change_request_id=request.id).run)
+    changed = next(i for i in third.items if i.item_id == target)
+    print(f"v{third.version_no} applies {third.change_request}: {target} now reads: {changed.statement}")
+    assert third.change_request == "CR-001" and third.version_no == 3

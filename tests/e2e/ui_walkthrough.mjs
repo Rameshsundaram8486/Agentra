@@ -263,6 +263,35 @@ async function main() {
     await shot("07-uploaded-source-document");
   });
 
+  await step("an approved baseline shows its traceability and an open change request", async () => {
+    await login("admin");
+    const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
+    await goto(crUrl, "document.querySelector('#change-requests li[data-cr=CR-001]') !== null", "change request listed");
+    const summary = await text("#requirements-summary");
+    if (!summary.includes("under change control")) throw new Error("baseline not shown as locked: " + summary);
+    if (/(^|\W)(null|undefined)(\W|$)/.test(summary + (await text("#traceability-gaps")))) throw new Error("empty value rendered as text: " + summary);
+    const matrix = await text("#traceability");
+    if (!matrix.includes("REQ-F-001") || !matrix.includes("OBJ-001")) throw new Error("traceability missing: " + matrix);
+    if ((await text("#change-requests")).includes("Ask the agent to apply it")) throw new Error("apply offered before approval");
+    await shot("09-change-request-open");
+  });
+
+  await step("owner and customer approve the change request; then the agent can be asked to apply it", async () => {
+    const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
+    const row = "document.querySelector('#change-requests li[data-cr=CR-001]')";
+    await evaluate(`([...${row}.querySelectorAll('button')].find((b) => b.innerText === 'Approve').click(), true)`);
+    await waitFor(`${row}.innerText.includes('owner (approved)')`, "owner approval recorded");
+    await evaluate(`([...${row}.querySelectorAll('button')].find((b) => b.innerText === 'Approve').click(), true)`);
+    await waitFor(`${row}.querySelector('.alert').innerText.includes('already decided')`, "same person refused a second approval");
+    await login("customer");
+    await goto(crUrl, `${row} !== null`, "change request as customer");
+    await evaluate(`([...${row}.querySelectorAll('button')].find((b) => b.innerText === 'Approve').click(), true)`);
+    await waitFor(`${row}.querySelector('.badge').innerText.toLowerCase() === 'approved'`, "change request approved");
+    await login("admin");
+    await goto(crUrl, `${row}?.innerText.includes('Ask the agent to apply it')`, "apply offered to the owner");
+    await shot("10-change-request-approved");
+  });
+
   await step("project page lists the approved document and the audit page loads", async () => {
     await goto(projectUrl, "document.getElementById('documents').innerText.includes('Leave app BRD')", "documents table");
     const docs = await text("#documents");

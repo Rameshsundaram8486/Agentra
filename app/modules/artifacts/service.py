@@ -8,7 +8,7 @@ import base64
 import binascii
 import difflib
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from sqlalchemy.orm import Session
 
@@ -30,7 +30,7 @@ from app.modules.artifacts.schemas import (
     VersionRecord,
 )
 from app.modules.audit.service import AuditService
-from app.modules.errors import ConflictError, IntegrityFailureError, NotFoundError, ValidationFailedError
+from app.modules.errors import ConflictError, IntegrityFailureError, InvalidTransitionError, NotFoundError, ValidationFailedError
 from app.modules.identity.service import Actor, IdentityService
 
 __all__ = [
@@ -69,14 +69,19 @@ class ArtifactsService:
         identity: IdentityService,
         store: ArtifactStore,
         artifact_types: Mapping[str, str],
+        baselines: frozenset[str] = frozenset(),
+        approval_status: Callable[[uuid.UUID], str] | None = None,
     ) -> None:
-        """artifact_types maps each allowed type to its display title (from the approval matrix)."""
+        """artifact_types maps each allowed type to its display title (from the approval matrix). baselines are
+        the types under change control; approval_status gives a version's latest approval decision."""
         self._session = session
         self._clock = clock
         self._audit = audit
         self._identity = identity
         self._store = store
         self._types = artifact_types
+        self._baselines = baselines
+        self._approval_status = approval_status
 
     # Authoring ------------------------------------------------------------------------------
 
@@ -113,10 +118,18 @@ class ArtifactsService:
         )
         return self._detail(artifact, [version])
 
-    def add_version(self, actor: Actor, artifact_id: uuid.UUID, data: VersionCreate) -> ArtifactDetail:
+    def add_version(
+        self, actor: Actor, artifact_id: uuid.UUID, data: VersionCreate, *, authorised_change: bool = False
+    ) -> ArtifactDetail:
+        """authorised_change is set only by the requirements service when it applies an approved change request."""
         artifact = self._load(artifact_id)
         self._identity.require_project(actor, artifact.project_id, "artifact.author")
         data = VersionCreate.model_validate(data)
+        if not authorised_change and self.is_locked_baseline(artifact_id):
+            raise InvalidTransitionError(
+                f"'{artifact.title}' v{artifact.current_version_no} is an approved baseline under change control; "
+                "raise a change request to change it"
+            )
         if artifact.current_version_no != data.expected_current_version:
             raise ConflictError(
                 f"This artifact is now at version {artifact.current_version_no}; reload it and apply your changes again"
@@ -227,6 +240,14 @@ class ArtifactsService:
         artifacts = repository.artifacts_for_project(self._session, project_id, artifact_type)
         current = repository.current_versions(self._session, artifacts)
         return [self._record(artifact, current[artifact.id]) for artifact in artifacts]
+
+    def is_locked_baseline(self, artifact_id: uuid.UUID) -> bool:
+        """A change-controlled type whose current version is approved."""
+        artifact = self._load(artifact_id)
+        if artifact.artifact_type not in self._baselines or self._approval_status is None:
+            return False
+        current = repository.get_version_by_number(self._session, artifact.id, artifact.current_version_no)
+        return current is not None and self._approval_status(current.id) == "approved"
 
     def author_ids(self, artifact_id: uuid.UUID) -> set[uuid.UUID]:
         return repository.author_ids(self._session, artifact_id)

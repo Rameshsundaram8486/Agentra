@@ -6,6 +6,11 @@
 # Which approvals a phase needs before it can complete is set in each phase file (exit.required_approvals).
 # decisions: who may record the outcome of a decision request raised by an agent or a person.
 #
+# baselines: artifact types under change control. Once the current version is approved, nobody can add a
+#   version directly; only an approved change request can (applied by the requirements service).
+# change_requests.required_roles: a change request needs one approval per listed role, each from a
+#   different person, and never from the person who raised it. Any rejection rejects it.
+#
 # Agents never approve or decide. That is enforced in code; a role list containing "agent" fails startup.
 # Phase-specific types are refined as each phase increment is built.
 version: 1
@@ -46,3 +51,8 @@ artifact_types:
 
 decisions:
   decider_roles: [owner, project_manager]
+
+baselines: [requirements_baseline]
+
+change_requests:
+  required_roles: [owner, customer_approver]

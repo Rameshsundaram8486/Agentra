@@ -57,7 +57,8 @@ def test_seed_demo_gives_the_admin_every_review_role_on_the_demo_project_only(
     admin_email, author_email, code = f"demo_admin_{suffix}@example.test", f"demo_pm_{suffix}@example.test", f"DEMO-{suffix.upper()}"
     main(["create-user", "--email", admin_email, "--name", "Demo Admin", "--admin"], settings=test_settings, read_password=lambda: DEFAULT_PASSWORD)
     other = make_team()
-    args = ["seed-demo", "--admin-email", admin_email, "--author-email", author_email, "--code", code]
+    customer_email = f"demo_customer_{suffix}@example.test"
+    args = ["seed-demo", "--admin-email", admin_email, "--author-email", author_email, "--customer-email", customer_email, "--code", code]
 
     first = main(args, settings=test_settings, read_password=lambda: DEFAULT_PASSWORD)
     second = main(args, settings=test_settings, read_password=lambda: DEFAULT_PASSWORD)  # safe to re-run
@@ -83,6 +84,7 @@ def test_seed_demo_gives_the_admin_every_review_role_on_the_demo_project_only(
     assert demo_roles == {"owner", "reviewer", "customer_approver"}
     assert ("business_analyst@agents.agentra.local", "agent") in members
     assert (author_email, "project_manager") in members
+    assert (customer_email, "customer_approver") in members
     assert roles_elsewhere == set()  # the extra roles exist on the demo project only
     assert len(briefs) == 1 and briefs[0].current_version_no == 1  # not duplicated by the second run
     assert phase_7 == "in_progress"

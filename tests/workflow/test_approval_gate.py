@@ -76,17 +76,25 @@ def test_unapproved_or_rejected_baseline_blocks_completion(run: Run, team: Team)
         _complete(run, team, phase)
 
 
-def test_approval_of_v1_does_not_carry_over_to_v2(run: Run, team: Team) -> None:
+def test_a_new_version_needs_its_own_approval(run: Run, team: Team) -> None:
     phase = _phase_7_in_review(run, team)
     brd = _brd(run, team)
-    _review(run, team, brd)
-    v2 = run(lambda s: s.artifacts.add_version(team.agent.actor, brd.id, VersionCreate(content="# BRD v2\n", change_summary="Scope change", expected_current_version=1)))
+    _review(run, team, brd, "changes_requested", "Missing NFRs")  # not approved, so not under change control yet
+    v2 = run(lambda s: s.artifacts.add_version(team.agent.actor, brd.id, VersionCreate(content="# BRD v2\n", change_summary="Added NFRs", expected_current_version=1)))
 
     with pytest.raises(InvalidTransitionError, match="'BRD' v2 is not approved"):
         _complete(run, team, phase)
 
     _review(run, team, v2)
     assert _complete(run, team, phase).state == "completed"
+
+
+def test_an_approved_baseline_cannot_get_a_new_version_without_a_change_request(run: Run, team: Team) -> None:
+    brd = _brd(run, team)
+    _review(run, team, brd)
+
+    with pytest.raises(InvalidTransitionError, match="under change control; raise a change request"):
+        run(lambda s: s.artifacts.add_version(team.pm.actor, brd.id, VersionCreate(content="# BRD v2\n", change_summary="Quiet edit", expected_current_version=1)))
 
 
 def test_a_later_rejection_of_the_same_version_wins(run: Run, team: Team, make_user: Callable[..., Any], add_member: Any) -> None:

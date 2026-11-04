@@ -37,6 +37,23 @@ tasks:
     input_artifact_types: [project_brief]
     context_artifact_types: [source_document]
     context_decisions_from: [clarify_brief, draft_requirements]  # including answers to its own open questions
-    prompt: prompts/draft_requirements.v1.md
-    output_schema: schemas/draft_requirements.v1.json
+    context_reviews_of: [requirements_baseline]  # a reviewer's "changes requested" comments drive the redraft
+    prompt: prompts/draft_requirements.v2.md
+    output_schema: schemas/draft_requirements.v2.json
+    max_attempts: 2
+
+  apply_change_request:
+    title: Apply a change request
+    description: >
+      Applies an approved change request to the approved requirements baseline, changing only the items it
+      lists (and adding items only if it allows), producing a new version that needs approval again.
+    phase: 7
+    workflow_task: null  # changes arrive after the phase task is done, often after the phase itself
+    phase_states: [in_progress, waiting_for_input, waiting_for_review, completed]
+    input_artifact_types: [requirements_baseline]
+    context_artifact_types: [project_brief, source_document]
+    context_decisions_from: [clarify_brief, draft_requirements]
+    requires_change_request: true
+    prompt: prompts/apply_change_request.v1.md
+    output_schema: schemas/draft_requirements.v2.json
     max_attempts: 2

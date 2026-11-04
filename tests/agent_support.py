@@ -7,6 +7,8 @@ from typing import Any
 
 from app.harness.runner import AgentRunner
 from app.infrastructure.job_queue import ClaimedJob
+from app.modules.executions.schemas import AgentRunCreate
+from app.modules.workflow.service import TransitionRequest
 
 BRIEF = """# Leave Management - project brief
 
@@ -134,6 +136,7 @@ def req(
     answers: list[dict[str, str]] | None = None,
     recommended: str | None = None,
     rationale: str = "",
+    related: list[str] | None = None,
 ) -> dict[str, Any]:
     """One draft_requirements output item; by default a fact quoting the brief."""
     testable = kind in ("functional", "non_functional", "user_story")
@@ -146,6 +149,7 @@ def req(
         "priority": priority if testable or kind == "business_rule" else "not_set",
         "acceptance_criteria": criteria if criteria is not None else (["A tester can submit a request and see it listed within 5 seconds"] if testable else []),
         "sources": sources or [{"ref": "DOC-1", "quote": BRIEF_QUOTE}],
+        "related": related or [],
         "suggested_answers": answers or [],
         "recommended_answer": recommended,
         "recommendation_rationale": rationale,
@@ -159,9 +163,9 @@ def draft_items() -> list[dict[str, Any]]:
         req("new-2", "stakeholder", "Line managers", "Line managers approve or reject their team's leave.",
             sources=[{"ref": "DOC-1", "quote": "Line managers approve or reject requests"}]),
         req("new-3", "functional", "Request leave online", "Employees can request annual, sick and unpaid leave online.",
-            sources=[{"ref": "DOC-1", "quote": "Employees request annual, sick and unpaid leave online."}]),
+            sources=[{"ref": "DOC-1", "quote": "Employees request annual, sick and unpaid leave online."}], related=["new-1"]),
         req("new-4", "functional", "Platform", "The solution is built on Microsoft Power Platform.",
-            sources=[{"ref": "DEC-1", "quote": ""}]),  # rests on the stack decision
+            sources=[{"ref": "DEC-1", "quote": ""}], related=["new-1"]),  # rests on the stack decision
         req("new-5", "functional", "Manager reminders", "Managers get a reminder after two working days.",
             sources=[{"ref": "DOC-2", "quote": "a reminder after two working days"}]),
         req("new-6", "assumption", "Licences", "Microsoft 365 licences include Power Apps.", label="assumption"),
@@ -179,6 +183,7 @@ def draft_output(items: list[dict[str, Any]] | None = None, **changes: Any) -> d
         "summary": "An online leave request and approval system for Example Trading LLC.",
         "items": items if items is not None else draft_items(),
         "process_flow_mermaid": "flowchart TD\n  A[Employee requests leave] --> B{Manager decides}",
+        "review_responses": [],
     }
     output.update(changes)
     return output
@@ -186,3 +191,19 @@ def draft_output(items: list[dict[str, Any]] | None = None, **changes: Any) -> d
 
 def draft_json(items: list[dict[str, Any]] | None = None, **changes: Any) -> str:
     return json.dumps(draft_output(items, **changes))
+
+
+def ask(run: Any, team: Any, task_key: str, version_id: uuid.UUID, actor: Any = None, change_request_id: uuid.UUID | None = None) -> Any:
+    """Asks the Business Analyst agent for a task, as the PM unless another actor is given."""
+    data = AgentRunCreate(agent_key="business_analyst", task_key=task_key, artifact_version_id=version_id, change_request_id=change_request_id)
+    return run(lambda s: s.executions.request_run(actor or team.pm.actor, team.project.id, data))
+
+
+def phase_task(run: Any, team: Any, key: str, phase: int = 7) -> Any:
+    current = next(p for p in run(lambda s: s.workflow.list_phase_runs(team.owner.actor, team.project.id)) if p.phase == phase)
+    return next(t for t in current.tasks if t.key == key)
+
+
+def move_task(run: Any, actor: Any, task: Any, to_state: str) -> Any:
+    request = TransitionRequest(to_state=to_state, reason="Test step", expected_version=task.version)
+    return run(lambda s: s.workflow.transition_task(actor, task.id, request))

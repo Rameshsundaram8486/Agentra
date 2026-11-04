@@ -102,21 +102,33 @@ class ExecutionsService:
         if problems or blockers:
             raise ValidationFailedError(f"The {task.agent_name} cannot start yet: {'; '.join(problems + blockers)}")
         assert agent is not None
-        workflow_task = self._workflow.task_by_key(project_id, task.spec.phase, task.spec.workflow_task)
-        if workflow_task is None:
-            raise ValidationFailedError(f"This project has no '{task.spec.workflow_task}' task in Phase {task.spec.phase}")
-        if workflow_task.state not in _START_PATHS:
-            raise InvalidTransitionError(f"The '{workflow_task.title}' task is {workflow_task.state.replace('_', ' ')}")
+        if task.spec.requires_change_request != (data.change_request_id is not None):
+            raise ValidationFailedError(
+                "Name the change request to apply" if task.spec.requires_change_request else "This task does not apply a change request"
+            )
+        workflow_task = None
+        if task.spec.workflow_task is not None:
+            workflow_task = self._workflow.task_by_key(project_id, task.spec.phase, task.spec.workflow_task)
+            if workflow_task is None:
+                raise ValidationFailedError(f"This project has no '{task.spec.workflow_task}' task in Phase {task.spec.phase}")
+            if workflow_task.state not in _START_PATHS:
+                raise InvalidTransitionError(f"The '{workflow_task.title}' task is {workflow_task.state.replace('_', ' ')}")
 
         context = self._context_snapshot(actor, project_id, task)
+        if data.change_request_id is not None:
+            context["change_request"] = str(data.change_request_id)
         fingerprint = hashlib.sha256(json.dumps({"input": str(record.id), **context}, sort_keys=True).encode()).hexdigest()[:16]
         earlier = repository.runs_for_input(self._session, task.agent_key, task.key, record.id)
         same = next((r for r in reversed(earlier) if r.status in _ACTIVE and r.input_refs.get("fingerprint") == fingerprint), None)
         if same is not None:
             return RunRequestResult(run=self._views([same])[0], created=False)
-        busy = [r for r in repository.runs_for_project(self._session, project_id) if r.task_id == workflow_task.id and r.status in _BUSY]
+        busy = [
+            r
+            for r in repository.runs_for_project(self._session, project_id)
+            if r.status in _BUSY and (r.task_id == workflow_task.id if workflow_task else (r.agent_key, r.task_key) == (task.agent_key, task.key))
+        ]
         if busy:
-            raise InvalidTransitionError(f"The {task.agent_name} is already working on '{workflow_task.title}'; wait for that run to finish")
+            raise InvalidTransitionError(f"The {task.agent_name} is already working on '{task.spec.title}'; wait for that run to finish")
 
         now = self._clock.now()
         run = AgentRun(
@@ -129,7 +141,7 @@ class ExecutionsService:
             schema_version=task.schema_file.version,
             input_artifact_version_id=record.id,
             input_refs={**context, "fingerprint": fingerprint},
-            task_id=workflow_task.id,
+            task_id=workflow_task.id if workflow_task else None,
             idempotency_key=f"{task.agent_key}.{task.key}:{record.id}:{fingerprint}:{len(earlier) + 1}",
             status="queued",
             attempts=0,
@@ -147,7 +159,8 @@ class ExecutionsService:
             # Someone asked for the same thing at the same moment; theirs won.
             winner = next(r for r in repository.runs_for_input(self._session, task.agent_key, task.key, record.id) if r.status in _ACTIVE)
             return RunRequestResult(run=self._views([winner])[0], created=False)
-        self._start_task(workflow_task, f"Asked the {task.agent_name}: {task.spec.title}", actor, agent)
+        if workflow_task is not None:
+            self._start_task(workflow_task, f"Asked the {task.agent_name}: {task.spec.title}", actor, agent, reviewed=bool(context["reviews"]))
         run.job_id = JobQueue(self._session, self._clock).enqueue(
             AGENT_RUN_JOB, {"agent_run_id": str(run.id)}, run.idempotency_key, max_attempts=task.spec.max_attempts
         )
@@ -341,6 +354,16 @@ class ExecutionsService:
     def month_spend(self) -> Decimal:
         return repository.spend_since(self._session, _month_start(self._clock.now()))
 
+    def open_questions(self, task_id: uuid.UUID) -> int:
+        """How many questions raised by succeeded runs of this task are still open (not decided or deferred)."""
+        ids = [
+            uuid.UUID(value)
+            for run in repository.runs_for_task(self._session, task_id)
+            if run.status == "succeeded"
+            for value in (run.output or {}).get("decision_ids", [])
+        ]
+        return sum(1 for status in self._decisions.decision_statuses(ids).values() if status == "open")
+
     def link_earlier_runs(self, actor: Actor, project_id: uuid.UUID) -> int:
         """Links runs made before their workflow task existed (projects opened before Increment 3a), and moves a
         task whose run already succeeded to waiting for input. Returns how many runs were linked."""
@@ -375,11 +398,25 @@ class ExecutionsService:
         decisions = [
             {"id": value, "outcomes": len(self._decisions.get_decision(actor, uuid.UUID(value)).outcomes)} for value in decision_ids
         ]
-        return {"documents": documents, "decisions": decisions}
+        reviews = []
+        for artifact_type in task.spec.context_reviews_of:
+            for record in self._artifacts.current_records_of_type(project_id, artifact_type):
+                history = self._decisions.artifact_approvals(actor, record.artifact_id).history
+                reviews += [
+                    str(review.id)
+                    for review in sorted(history, key=lambda r: r.created_at)
+                    if review.artifact_version_id == record.id and review.decision != "approved"
+                ]
+        return {"documents": documents, "decisions": decisions, "reviews": reviews}
 
-    def _start_task(self, task: TaskView, reason: str, requester: Actor, agent: Actor) -> None:
-        """Moves the task to in_progress, each step as the requester, or as the agent where only it may."""
+    def _start_task(self, task: TaskView, reason: str, requester: Actor, agent: Actor, *, reviewed: bool = False) -> None:
+        """Moves the task to in_progress, each step as the requester, or as the agent where only it may. A task
+        waiting for review goes back through changes_requested; when a reviewer has already asked for changes
+        on the document, Agentra records that step itself."""
         for target in _START_PATHS[task.state]:
+            if target == "changes_requested" and reviewed:
+                self._move_task(task.id, target, SYSTEM_ACTOR, "A reviewer requested changes on the document", strict=True)
+                continue
             try:
                 self._move_task(task.id, target, requester, reason, strict=True)
             except PermissionDeniedError:

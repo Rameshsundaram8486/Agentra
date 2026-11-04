@@ -57,11 +57,13 @@ Agent runs need the Claude API and a worker process:
 4. On the project page, choose **Ask about the brief** and the brief, and click **Ask the Business Analyst agent**. After a minute or two the run shows as succeeded and its questions are in the decision inbox.
 5. Answer the questions in the decision inbox, then close the **Clarify the project brief** task in the Phases table (*completed*).
 6. Optionally upload source documents (**Upload file**: .txt, .md, .docx or .pdf), then choose **Draft the requirements**. The draft appears under **Requirements** and as the *Business requirements* document; its open questions go to the inbox.
-7. Answer them and ask again for a revised draft, or have a reviewer approve the document and complete the draft task.
+7. Answer them and ask again for a revised draft. A reviewer can also request changes on the document with a comment; asking again then produces a version that answers each comment.
+8. Have a reviewer approve the document and complete the draft task. The baseline is now locked.
+9. To change it, raise a change request (Requirements section, **Change requests**). An owner and a customer approver, two different people and not the one who raised it, approve it; then **Ask the agent to apply it**. The new version needs approval again. `seed-demo` creates `customer@agentra.local` as the demo customer approver, because `admin@agentra.local` can give only one of the two approvals.
 
 `seed-demo` also adds tasks defined after a project was opened (for projects from before Increment 3a) and links earlier agent runs to them.
 
-- A clarify run costs roughly $0.15-0.30 and a requirements draft roughly $0.30-0.80 at effort `high`; the run list shows the cost. `budget.monthly_usd` in `config/models.yaml` (default $50) stops new calls once this month's spend plus the next call's worst case would exceed it.
+- A clarify run costs roughly $0.15-0.30, and a requirements draft, redraft or applied change request roughly $0.35-0.60 each at effort `high`; the run list shows the cost. `budget.monthly_usd` in `config/models.yaml` (default $50) stops new calls once this month's spend plus the next call's worst case would exceed it.
 - Model, effort and token limits per agent are in `config/models.yaml`; the prompt and output schema are in `config/agents/business_analyst/`.
 
 ## Testing

@@ -41,6 +41,7 @@ def test_matrix_listing_agent_as_approver_or_decider_is_rejected(section: str) -
         "version": 1,
         "artifact_types": {"doc": {"title": "Doc", "approver_roles": ["reviewer"]}},
         "decisions": {"decider_roles": ["owner"]},
+        "change_requests": {"required_roles": ["owner"]},
     }
     if section == "artifact":
         data["artifact_types"]["doc"]["approver_roles"] = ["reviewer", "agent"]
@@ -49,6 +50,24 @@ def test_matrix_listing_agent_as_approver_or_decider_is_rejected(section: str) -
 
     with pytest.raises(ValidationError, match="human project roles"):
         ApprovalMatrix.model_validate(data)
+
+
+@pytest.mark.parametrize("roles", [["owner", "agent"], ["owner", "owner"], []])
+def test_change_request_roles_must_be_distinct_human_roles(roles: list[str]) -> None:
+    data: dict[str, Any] = {
+        "version": 1,
+        "artifact_types": {"doc": {"title": "Doc", "approver_roles": ["reviewer"]}},
+        "decisions": {"decider_roles": ["owner"]},
+        "change_requests": {"required_roles": roles},
+    }
+
+    with pytest.raises(ValidationError, match="distinct human project roles"):
+        ApprovalMatrix.model_validate(data)
+
+
+def test_both_owner_and_customer_approver_must_approve_a_change_request() -> None:
+    assert MATRIX.change_requests.required_roles == ("owner", "customer_approver")
+    assert MATRIX.baselines == {"requirements_baseline"}
 
 
 @pytest.mark.parametrize("kind", ["agent", "system"])

@@ -21,6 +21,8 @@ const TONE = {
   open: "info",
   deferred: "warning",
   decided: "success",
+  // change requests
+  applied: "success",
   // requirement items
   confirmed: "success",
   proposed: "warning",

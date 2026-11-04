@@ -1,6 +1,7 @@
 # Browser walkthrough of the Control Center against the TEST database (never the development one).
 # Seeds three throwaway users, starts the API on port 8010, drives headless Edge (or Chrome) through
-# sign-in, projects, team, documents, versions, diff, approval, decisions, phase tasks, a Word upload and asking the Business Analyst agent
+# sign-in, projects, team, documents, versions, diff, approval, decisions, phase tasks, a Word upload, asking the Business Analyst agent,
+# and a change request approved by an owner and a customer (seeded with the scripted fake model)
 # (the run stays queued: no worker and no model call), then stops the API.
 # Screenshots and logs go to var\ui-walkthrough (gitignored). Exit code 0 means every step passed with no JS errors.
 # Usage: powershell -ExecutionPolicy Bypass -File scripts\run_ui_walkthrough.ps1

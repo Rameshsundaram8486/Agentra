@@ -1,6 +1,6 @@
 # Data model
 
-PostgreSQL tables as of migration `0005`. Each table belongs to one module. Other modules use that module's `service.py` and never query its tables. Foreign keys across modules exist only for referential integrity.
+PostgreSQL tables as of migration `0006`. Each table belongs to one module. Other modules use that module's `service.py` and never query its tables. Foreign keys across modules exist only for referential integrity.
 
 ```mermaid
 erDiagram
@@ -26,6 +26,9 @@ erDiagram
   artifact_versions ||--o| requirement_versions : "drafted as"
   artifact_versions ||--o{ requirement_items : "contains"
   projects ||--o{ requirement_ids : "issues"
+  artifact_versions ||--o{ change_requests : "baseline of"
+  change_requests ||--o{ change_request_events : "decided and applied by"
+  change_requests |o--o{ requirement_versions : "applied as"
 ```
 
 | Table | Module | Purpose | Key rules |
@@ -45,8 +48,10 @@ erDiagram
 | `decision_outcomes` | decisions | Each human response: accept, select an option, other, modify, reject or defer | Numbered per request, with a unique `(request, outcome_no)` so concurrent answers cannot both win. A final outcome closes the request. **Append-only**. |
 | `agent_runs` | executions | One request for an agent task on one document version | `queued`, `running`, then `succeeded`, `failed` or `blocked`, with error code, message and guardrail findings. Unique `idempotency_key` per (agent, task, version, attempt number): asking again returns the active run. Records the agent, prompt and schema versions, cost and the ids of the decisions it raised. `task_id` links the workflow task it works on; `input_refs` fixes the other documents and decision states it read. |
 | `model_calls` | executions | Every model call, and the spend ledger for the monthly cap | Written as `pending` at its worst-case cost **before** the call and committed, then settled with real tokens, cost, the model that answered, fallback use, stop reason, refusal category, latency and request id. Pending or abandoned calls keep counting at their reserve. Budget checks take an advisory lock. |
-| `requirement_versions` | requirements | One drafted requirements set, tied to one requirements baseline document version | Summary, process flow, set-level quality flags, inputs, and the previous version (for added and removed IDs). **Append-only**. |
-| `requirement_items` | requirements | Each requirement, story, rule, assumption, dependency or open question in a version | Item ID, kind, label (fact, assumption, suggestion, open question), status derived in code, priority, acceptance criteria, resolved sources (document version and quote, or decision and answer) and quality flags. **Append-only**: a revision is a new version with a full new set. |
+| `requirement_versions` | requirements | One drafted requirements set, tied to one requirements baseline document version | Summary, process flow, set-level quality flags, inputs, the previous version (for added and removed IDs), the answers to review comments and the change request it applied, if any. **Append-only**. |
+| `requirement_items` | requirements | Each requirement, story, rule, assumption, dependency or open question in a version | Item ID, kind, label (fact, assumption, suggestion, open question), status derived in code, priority, acceptance criteria, resolved sources (document version and quote, or decision and answer), links to the items it traces to (`related`) and quality flags. **Append-only**: a revision is a new version with a full new set. |
+| `change_requests` | requirements | A request to change an approved baseline version, exactly as raised | Number (CR-001), reason, change, impact, affected item IDs (which must exist in that baseline), whether new items are allowed, who raised it. **Append-only**. |
+| `change_request_events` | requirements | Each approval or rejection, in a role, and the version that applied it | One decision per role, one application per request (partial unique indexes). Status is derived: rejected if any rejection, approved when every required role approved, applied once a version applied it. **Append-only**. |
 | `requirement_ids` | requirements | The item IDs a project has issued | Unique per project; numbers are never reused, so an ID means the same requirement in every version. **Append-only**. |
 | `jobs` | infrastructure | Background job queue | One job per `idempotency_key`. Claimed with `FOR UPDATE SKIP LOCKED` under a lease; reclaimed when the lease expires; `dead` after `max_attempts`. |
 | `outbox_messages` | infrastructure | External side effects | Written in the same transaction as the change that causes them. Delivered at least once, and handlers receive the idempotency key. |
@@ -64,5 +69,5 @@ erDiagram
 
 ## Planned additions
 
-- Increment 3b: change requests against an approved baseline, the traceability matrix, reports, incident records.
+- Increment 3c: reports (requirements summary and detailed BRD/traceability), incident records for failed agent runs.
 - Later: evals, tool calls.

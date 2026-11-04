@@ -116,6 +116,61 @@
           <div class="card" id="requirements-summary"></div>
           <div class="card card-flush" id="requirements"></div>
         </section>
+
+        <section class="section" id="traceability-section" hidden>
+          <div class="section-header">
+            <h2>Traceability</h2>
+            <a id="traceability-csv" class="button button-secondary button-small">Download CSV</a>
+          </div>
+          <div class="card" id="traceability-gaps"></div>
+          <div class="card card-flush" id="traceability"></div>
+        </section>
+
+        <section class="section" id="change-section" hidden>
+          <div class="section-header">
+            <h2>Change requests</h2>
+            <button id="cr-toggle" class="button button-secondary button-small" type="button" hidden>Raise a change request</button>
+          </div>
+          <p class="muted small">An approved requirements baseline changes only through a change request approved by every
+            role listed on it, each by a different person, never by the person who raised it.</p>
+          <div class="card" id="cr-new" hidden>
+            <form id="cr-form" class="form">
+              <h3>Raise a change request</h3>
+              <div class="field">
+                <label for="cr-title">Title</label>
+                <input id="cr-title" name="title" required minlength="3" maxlength="200">
+              </div>
+              <div class="field">
+                <label for="cr-reason">Reason</label>
+                <textarea id="cr-reason" name="reason" rows="2" required minlength="3"></textarea>
+              </div>
+              <div class="field">
+                <label for="cr-change">What should change</label>
+                <textarea id="cr-change" name="change" rows="3" required minlength="3"></textarea>
+              </div>
+              <div class="field">
+                <label for="cr-impact">Impact on scope, schedule and cost</label>
+                <textarea id="cr-impact" name="impact" rows="2" required minlength="3"></textarea>
+              </div>
+              <div class="form-row">
+                <div class="field">
+                  <label for="cr-affected">Affected requirement IDs</label>
+                  <input id="cr-affected" name="affected" placeholder="e.g. REQ-F-001, BR-002">
+                  <span class="hint">Only these may change; everything else must stay exactly as approved.</span>
+                </div>
+                <div class="field">
+                  <label><input id="cr-new-items" name="allows_new_items" type="checkbox"> New requirements may be added</label>
+                </div>
+              </div>
+              <div id="cr-error" class="alert alert-error" role="alert" hidden></div>
+              <div class="actions">
+                <button class="button" type="submit">Raise</button>
+                <button id="cr-cancel" class="button button-secondary" type="button">Cancel</button>
+              </div>
+            </form>
+          </div>
+          <div class="card" id="change-requests"></div>
+        </section>
       </div>
 
       <div class="section">

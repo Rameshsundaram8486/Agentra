@@ -203,17 +203,27 @@ async function loadRequirements() {
     return;
   }
   const changes = view.version_no > 1 ? ` Added: ${view.added.join(", ") || "none"}. Removed: ${view.removed.join(", ") || "none"}.` : "";
-  document.getElementById("requirements-summary").replaceChildren(
+  currentRequirements = view;
+  // replaceChildren would render a null argument as the text "null", so optional parts are filtered out.
+  const parts = [
     h(
       "div",
       { class: "section-header" },
       h("a", { class: "primary", href: `artifact.html?id=${encodeURIComponent(view.artifact_id)}` }, `${view.artifact_title} v${view.version_no}`),
       statusBadge(view.approval_status),
     ),
+    view.locked ? h("p", { class: "small" }, "Approved baseline, under change control: changes need an approved change request.") : null,
+    view.change_request
+      ? h("p", { class: "small" }, `This version applies ${view.change_request}${view.approval_status === "approved" ? "." : "; it needs approval again."}`)
+      : null,
     h("p", {}, view.summary),
+    view.review_responses.length
+      ? h("ul", { class: "bullets small" }, view.review_responses.map((r) => h("li", {}, `Review comment "${r.comment}": ${r.response}`)))
+      : null,
     h("p", { class: "muted small" }, `${view.counts.confirmed} confirmed, ${view.counts.proposed} proposed, ${view.counts.open} open.${changes} Review and approve it on the document page.`),
     ...flagLines(view.set_flags),
-  );
+  ];
+  document.getElementById("requirements-summary").replaceChildren(...parts.filter(Boolean));
   const rows = view.items.map((item) =>
     h(
       "tr",
@@ -227,7 +237,13 @@ async function loadRequirements() {
         item.acceptance_criteria.length ? h("ul", { class: "bullets small" }, item.acceptance_criteria.map((c) => h("li", {}, c))) : null,
         ...flagLines(item.quality_flags),
       ),
-      h("td", { class: "small" }, humanise(item.kind), h("div", { class: "sub" }, humanise(item.label))),
+      h(
+        "td",
+        { class: "small" },
+        humanise(item.kind),
+        h("div", { class: "sub" }, humanise(item.label)),
+        item.related.length ? h("div", { class: "sub" }, `Traces to ${item.related.join(", ")}`) : null,
+      ),
       h("td", {}, statusBadge(item.status)),
     ),
   );
@@ -236,11 +252,161 @@ async function loadRequirements() {
   );
 }
 
+// Traceability and change requests ------------------------------------------------------------
+
+let currentRequirements = null;
+let canRaiseChange = false;
+let canRunAgent = false;
+
+async function loadTraceability() {
+  const matrix = await api(`/api/projects/${encodeURIComponent(projectId)}/requirements/traceability`);
+  const section = document.getElementById("traceability-section");
+  section.hidden = !matrix;
+  if (!matrix) return;
+  document.getElementById("traceability-csv").href = `/api/projects/${encodeURIComponent(projectId)}/requirements/traceability.csv`;
+  document.getElementById("traceability-gaps").replaceChildren(
+    h("p", { class: "muted small" }, `Version ${matrix.version_no} (${humanise(matrix.approval_status)}). Design and test columns fill in during Phases 8 and 10.`),
+    h(
+      "div",
+      { class: "small" },
+      `${matrix.rows.filter((row) => row.gaps.length).length} of ${matrix.rows.length} requirements have gaps; ${matrix.gaps.length} gap(s) across the set.`,
+    ),
+    ...matrix.gaps.map((gap) => h("div", { class: "small" }, `Gap: ${gap}`)),
+  );
+  const rows = matrix.rows.map((row) =>
+    h(
+      "tr",
+      {},
+      h("td", { class: "num" }, row.item_id),
+      h("td", {}, h("div", {}, row.title), ...row.gaps.map((gap) => h("div", { class: "small" }, `Gap: ${gap}`))),
+      h("td", { class: "small" }, row.objectives.join(", ") || "-"),
+      h("td", { class: "small" }, row.user_stories.join(", ") || "-"),
+      h("td", { class: "num" }, String(row.acceptance_criteria.length)),
+      h("td", { class: "small muted" }, `${row.design}; ${row.tests}`),
+    ),
+  );
+  document.getElementById("traceability").replaceChildren(
+    h(
+      "table",
+      { class: "table" },
+      h("thead", {}, h("tr", {}, h("th", {}, "ID"), h("th", {}, "Requirement"), h("th", {}, "Objectives"), h("th", {}, "Stories"), h("th", {}, "Criteria"), h("th", {}, "Design / tests"))),
+      h("tbody", {}, rows),
+    ),
+  );
+}
+
+async function decideChange(request, decision, comment, message) {
+  try {
+    await api(`/api/change-requests/${encodeURIComponent(request.id)}/decisions`, { method: "POST", body: { decision, comment: comment || null } });
+    await loadChangeRequests();
+  } catch (failure) {
+    message.textContent = failure.message;
+    message.hidden = false;
+  }
+}
+
+async function applyChange(request, message) {
+  try {
+    await api(`/api/projects/${encodeURIComponent(projectId)}/agent-runs`, {
+      method: "POST",
+      body: { agent_key: "business_analyst", task_key: "apply_change_request", artifact_version_id: request.baseline_version_id, change_request_id: request.id },
+    });
+    await loadAgentRuns();
+  } catch (failure) {
+    message.textContent = failure.message;
+    message.hidden = false;
+  }
+}
+
+function changeItem(request) {
+  const message = h("div", { class: "alert alert-error", role: "alert", hidden: true });
+  const comment = h("input", { "aria-label": `Comment on ${request.cr_id}`, placeholder: "Comment (required to reject)", maxlength: "4000" });
+  const roles = request.required_roles.map((role) => `${humanise(role)}${request.approved_roles.includes(role) ? " (approved)" : ""}`).join(", ");
+  const decisions = request.events.filter((e) => e.role).map((e) => `${humanise(e.event)} as ${humanise(e.role)} by ${e.actor_name ?? "someone"}${e.comment ? `: ${e.comment}` : ""}`);
+  return h(
+    "li",
+    { "data-cr": request.cr_id },
+    h(
+      "div",
+      {},
+      h("div", { class: "primary" }, `${request.cr_id}: ${request.title}`),
+      h("div", { class: "small" }, request.change),
+      h("div", { class: "muted small" }, `Reason: ${request.reason}. Impact: ${request.impact}.`),
+      h("div", { class: "muted small" }, `Against v${request.baseline_version_no}. Affects ${request.affected_item_ids.join(", ") || "no existing items"}${request.allows_new_items ? "; may add new items" : ""}. Raised by ${request.raised_by_name ?? "someone"}.`),
+      h("div", { class: "muted small" }, `Needs: ${roles}`),
+      ...decisions.map((line) => h("div", { class: "small" }, line)),
+      request.applied_version_no ? h("div", { class: "small" }, `Applied in version ${request.applied_version_no}.`) : null,
+      request.status === "open"
+        ? h(
+            "div",
+            { class: "actions" },
+            comment,
+            h("button", { class: "button button-small", type: "button", onclick: () => decideChange(request, "approved", comment.value.trim(), message) }, "Approve"),
+            h("button", { class: "button button-small button-danger", type: "button", onclick: () => decideChange(request, "rejected", comment.value.trim(), message) }, "Reject"),
+          )
+        : null,
+      request.status === "approved" && canRunAgent
+        ? h("div", { class: "actions" }, h("button", { class: "button button-small", type: "button", onclick: () => applyChange(request, message) }, "Ask the agent to apply it"))
+        : null,
+      message,
+    ),
+    statusBadge(request.status),
+  );
+}
+
+async function loadChangeRequests() {
+  const requests = await api(`/api/projects/${encodeURIComponent(projectId)}/change-requests`);
+  const section = document.getElementById("change-section");
+  section.hidden = !(requests.length || currentRequirements?.locked);
+  document.getElementById("cr-toggle").hidden = !(canRaiseChange && currentRequirements?.locked);
+  document.getElementById("change-requests").replaceChildren(
+    requests.length ? h("ul", { class: "list" }, requests.map(changeItem)) : h("p", { class: "muted" }, "No change requests yet."),
+  );
+}
+
+function enableChangeRequests() {
+  const toggle = document.getElementById("cr-toggle");
+  const section = document.getElementById("cr-new");
+  const form = document.getElementById("cr-form");
+  const error = document.getElementById("cr-error");
+  toggle.addEventListener("click", () => {
+    section.hidden = false;
+    toggle.hidden = true;
+  });
+  document.getElementById("cr-cancel").addEventListener("click", () => {
+    section.hidden = true;
+    toggle.hidden = false;
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    error.hidden = true;
+    try {
+      await api(`/api/projects/${encodeURIComponent(projectId)}/change-requests`, {
+        method: "POST",
+        body: {
+          title: control(form, "title").value.trim(),
+          reason: control(form, "reason").value.trim(),
+          change: control(form, "change").value.trim(),
+          impact: control(form, "impact").value.trim(),
+          affected_item_ids: control(form, "affected").value.split(",").map((s) => s.trim()).filter(Boolean),
+          allows_new_items: control(form, "allows_new_items").checked,
+        },
+      });
+      form.reset();
+      section.hidden = true;
+      await loadChangeRequests();
+    } catch (failure) {
+      error.textContent = failure.message;
+      error.hidden = false;
+    }
+  });
+}
+
 async function refreshAfterRun() {
   await Promise.all([
     loadPhases(),
     loadDecisionSummary(),
-    loadRequirements(),
+    loadRequirements().then(() => Promise.all([loadTraceability(), loadChangeRequests()])),
     loadDocuments().then((artifacts) => fillBriefs(artifacts)),
   ]);
 }
@@ -458,7 +624,13 @@ startPage(async () => {
     can("artifact.view") ? loadDocuments() : Promise.resolve([]),
     can("decision.view") ? loadDecisionSummary() : Promise.resolve(),
   ]);
-  if (can("artifact.view")) await loadRequirements();
+  canRaiseChange = can("change.raise");
+  canRunAgent = can("agent.run");
+  if (can("artifact.view")) {
+    await loadRequirements();
+    enableChangeRequests();
+    await Promise.all([loadTraceability(), loadChangeRequests()]);
+  }
   if (can("agent_run.view")) {
     enableAgent(artifacts, can("agent.run"));
     await loadAgentRuns();

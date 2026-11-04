@@ -6,7 +6,7 @@ Everything comes from the stored items; nothing here is written by a model excep
 
 from collections.abc import Sequence
 
-from app.modules.requirements.schemas import KIND_TITLES, QualityFlag, RequirementItemView, SourceRef
+from app.modules.requirements.schemas import KIND_TITLES, QualityFlag, RequirementItemView, ReviewResponse, SourceRef
 
 _STATUS_NOTE = (
     "Each item is labelled fact, assumption, suggestion or open question. Its status is set by Agentra, not "
@@ -36,10 +36,20 @@ def render_brd(
     set_flags: Sequence[QualityFlag],
     process_flow_mermaid: str,
     input_refs: Sequence[str],
+    review_responses: Sequence[ReviewResponse] = (),
+    change_request: str | None = None,
 ) -> str:
-    lines = [f"# Business requirements: {project_name}", "", "Drafted by the Business Analyst Agent from:"]
+    lines = [f"# Business requirements: {project_name}", ""]
+    if change_request:
+        lines += [f"This version applies the approved change request {change_request}.", ""]
+    lines += ["Drafted by the Business Analyst Agent from:"]
     lines += [f"- {ref}" for ref in input_refs]
     lines += ["", f"> {_STATUS_NOTE}", "", "## Summary", "", summary.strip(), ""]
+    if review_responses:
+        lines += ["## Changes in this version", "", "Responses to the review comments on the previous version:", ""]
+        for response in review_responses:
+            lines += [f"- Review comment: \"{' '.join(response.comment.split())}\"", f"  Response: {response.response.strip()}"]
+        lines.append("")
     for kind, heading in KIND_TITLES.items():
         group = [item for item in items if item.kind == kind]
         if not group:
@@ -52,7 +62,11 @@ def render_brd(
                 meta += f" Priority: {item.priority}."
             lines += [f"*{meta}*", ""]
             if item.acceptance_criteria:
-                lines += ["Acceptance criteria:", *(f"- {criterion}" for criterion in item.acceptance_criteria), ""]
+                lines += ["Acceptance criteria:"]
+                lines += [f"- {item.item_id}.AC{n}: {criterion}" for n, criterion in enumerate(item.acceptance_criteria, start=1)]
+                lines.append("")
+            if item.related:
+                lines += [f"Traces to: {', '.join(item.related)}", ""]
             lines += ["Sources:", *(f"- {_source(source)}" for source in item.sources), ""]
             if item.quality_flags:
                 lines += [*(f"- {_flag(flag)}" for flag in item.quality_flags), ""]

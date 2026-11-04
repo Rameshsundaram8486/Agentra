@@ -17,6 +17,7 @@ class AgentRunCreate(BaseModel):
     agent_key: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
     task_key: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
     artifact_version_id: uuid.UUID
+    change_request_id: uuid.UUID | None = Field(default=None, description="For tasks that apply a change request")
 
 
 class FindingView(BaseModel):

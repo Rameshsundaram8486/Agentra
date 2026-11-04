@@ -2,7 +2,7 @@
 
 AI-native operating platform for an IT services company. Specialised agents do bounded work, a workflow engine owns state, and humans approve consequential decisions against exact artifact versions.
 
-> **Status: Increment 3a done: the Business Analyst agent clarifies the brief and drafts the requirements.** Working so far:
+> **Status: Increment 3b done: review loop, change-controlled baseline, change requests and traceability.** Working so far:
 > - sign-in with server sessions
 > - projects and role-based memberships
 > - a workflow engine driven by YAML lifecycles, with entry and exit gates, optimistic locking and a record of every transition
@@ -20,6 +20,9 @@ AI-native operating platform for an IT services company. Specialised agents do b
 > - uploads of plain text, Markdown, Word and PDF files as source documents, with their origin recorded
 > - Phase 7 tasks (clarify the brief, draft and review the requirements) that agent runs move through the workflow
 > - requirement items with server-assigned IDs, labels, sources, derived statuses and rule-based quality checks, rendered as the requirements baseline document
+> - a review loop: a reviewer's comments drive the redraft, which must answer each one
+> - an approved baseline under change control: changes only through a change request approved by an owner and a customer approver (different people, not the raiser), applied by the agent and limited in code to the items it lists
+> - a requirements traceability matrix (objectives, requirements, user stories, acceptance criteria, sources) with gap checks and CSV export
 >
 > Everything else is still scaffold: those files carry a one-line purpose header and say "Scaffold only". See [docs/architecture/overview.md](docs/architecture/overview.md).
 
