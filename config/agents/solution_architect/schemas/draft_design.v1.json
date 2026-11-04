@@ -107,7 +107,7 @@
       "properties": {
         "ref": {
           "type": "string",
-          "description": "REV-n."
+          "description": "REV-n for a review comment, FND-n for a review finding."
         },
         "response": {
           "type": "string"

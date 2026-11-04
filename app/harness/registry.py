@@ -33,6 +33,7 @@ class TaskSpec(_Strict):
     context_decisions_from: tuple[str, ...] = ()
     input_must_be_approved: bool = False  # the main input version must be approved (a baseline to build on)
     context_reviews_of: tuple[str, ...] = ()  # review comments (changes requested, rejected) on current versions
+    context_findings_of: tuple[str, ...] = ()  # review documents (security, feasibility) whose open findings it must answer
     requires_change_request: bool = False  # the person asking names an approved change request to apply
     prompt: str
     output_schema: str

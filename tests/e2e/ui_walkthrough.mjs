@@ -305,6 +305,18 @@ async function main() {
     await shot("11-solution-design");
   });
 
+  await step("the design reviews show the high security gap blocking approval, and reviews work from the current design", async () => {
+    const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
+    await goto(crUrl, "document.getElementById('design-reviews').innerText.includes('Feasibility review v1')", "design reviews");
+    const reviews = await text("#design-reviews");
+    for (const expected of ["Before this design version can be approved", "High-severity gaps: SC-03", "Security review v1", "Checklist: security_checklist v1"]) {
+      if (!reviews.includes(expected)) throw new Error(`reviews missing ${expected}: ${reviews}`);
+    }
+    await fill("#agent-task", "security_reviewer:review_security");
+    await waitFor("document.getElementById('agent-brief').innerText.includes('Solution design v1') && !document.getElementById('agent-submit').disabled", "current design offered");
+    await shot("11b-design-reviews");
+  });
+
   await step("owner generates the executive summary and views it in a sandboxed frame", async () => {
     const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
     await goto(crUrl, "document.querySelector('#report-actions button[data-report=requirements_summary]') !== null", "report buttons");

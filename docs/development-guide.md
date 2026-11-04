@@ -65,9 +65,11 @@ Agent runs need the Claude API and a worker process:
 11. A failed agent run opens an incident (project page, **Incidents**). Resolve it with a root-cause analysis; someone else verifies and closes it.
 
 12. Phase 8: once the requirements are approved and Phase 7 is completed, start Phase 8, then in the **Agents** panel choose **Solution Architect: compare solution options**, choose an option in Decisions, close the Compare task, and ask for **Solution Architect: draft the design**. The **Solution design** section shows coverage; Phase 8 completes only when every confirmed requirement is covered or excepted.
+13. Before the design can be approved, ask for **Security Reviewer: review the design's security** and **Developer: review the design's feasibility** (both work from the current design version). The **Reviews** card under **Solution design** shows what still blocks approval. A high-severity security gap or an item rated not feasible needs a redraft: ask the Solution Architect again, and it must answer every gap and concern; then review the new version. A reviewer signs the security review off by approving it (the checklist is `config/policies/security_checklist.yaml`), then approves the design. The review tasks close once the design is approved.
 
 `seed-demo` also adds tasks defined after a project was opened (for projects from before Increment 3a) and links earlier agent runs to them.
 
+- A security or feasibility review costs roughly $0.10-0.30; a design redraft that answers review findings can cost $1 or more and take several minutes, because it returns the whole design.
 - A clarify run costs roughly $0.15-0.30, and a requirements draft, redraft or applied change request roughly $0.35-0.60 each at effort `high`; the run list shows the cost. `budget.monthly_usd` in `config/models.yaml` (default $50) stops new calls once this month's spend plus the next call's worst case would exceed it.
 - Model, effort and token limits per agent are in `config/models.yaml`; the prompt and output schema are in `config/agents/business_analyst/`.
 
@@ -81,7 +83,7 @@ uv run pytest tests\unit # unit tests only, no database needed
 - Integration tests use `TEST_DATABASE_URL` from `.env`, and refuse to run unless the database name ends in `_test`.
 - Browser walkthrough of the Control Center (headless Edge or Chrome, test database, port 8010): `powershell -ExecutionPolicy Bypass -File scripts\run_ui_walkthrough.ps1`. Screenshots go to `var\ui-walkthrough\screens`.
 - Tests run against real PostgreSQL, not SQLite or mocks (ADR 0002).
-- Agent tests use a scripted fake model and never call the API. One live test makes a real call (costs money): `$env:AGENTRA_LIVE_TESTS = "1"; uv run pytest tests\live -s`.
+- Agent tests use a scripted fake model and never call the API. The opt-in live tests make real calls (costs money, about $4 for all five): `$env:AGENTRA_LIVE_TESTS = "1"; uv run pytest tests\live -s`.
 - Agent quality evals (`evals/README.md`): `uv run python -m evals.runner` replays the recorded answers for free and flags regressions against the committed baseline. `--mode live --cap 5` records new answers (costs money; about $2-3 for all cases). Run them before you change a prompt, model, effort level or guardrail.
 
 ## Database migrations

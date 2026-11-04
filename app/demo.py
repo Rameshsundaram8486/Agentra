@@ -56,7 +56,12 @@ before payroll.
 - Arabic and English are both used in the company.
 """
 DEMO_PHASE = 7
-AGENTS = (("business_analyst", "Business Analyst Agent"), ("solution_architect", "Solution Architect Agent"))
+AGENTS = (
+    ("business_analyst", "Business Analyst Agent"),
+    ("solution_architect", "Solution Architect Agent"),
+    ("security_reviewer", "Security Reviewer Agent"),
+    ("developer", "Developer Agent"),
+)
 
 
 def _ensure_user(services: Services, email: str, create: Callable[[], object]) -> Actor:
@@ -140,7 +145,7 @@ def seed_demo(
     return [
         f"{'Created' if created else 'Found'} demo project {project.code} ({project.id})",
         f"{admin_email} roles on {project.code}: {', '.join(roles)}",
-        "Business Analyst Agent and Solution Architect Agent are the project's agents",
+        f"{', '.join(name for _, name in AGENTS[:-1])} and {AGENTS[-1][1]} are the project's agents",
         f"{author_email} is the project's project manager (writes documents for the admin to review)",
         f"{customer_email} is a customer approver (the second approval a change request needs)",
         f"Project brief '{DEMO_BRIEF_TITLE}' is on the project; Phase {DEMO_PHASE} is {(phase_state or '').replace('_', ' ')}",

@@ -1,4 +1,5 @@
-"""Developer Agent: code/configuration and unit tests inside sandbox VMs (Phase 9; defect fixes 10, 11).
+"""Developer Agent: implementation feasibility reviews of the design (Phase 8); code, configuration and unit tests
+inside sandbox VMs (Phase 9; defect fixes 10, 11) are not built yet.
 
-Scaffold only: not implemented yet.
+Tasks: review_feasibility (agent.py).
 """

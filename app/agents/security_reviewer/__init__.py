@@ -1,4 +1,4 @@
-"""Security Reviewer: checklist-driven security review of designs and changes (Phase 8+).
+"""Security Reviewer: checklist-driven security review of designs (Phase 8; later changes too).
 
-Scaffold only: not implemented yet.
+Tasks: review_security (agent.py).
 """

@@ -27,7 +27,9 @@ from app.modules.identity.service import Actor
 from app.modules.projects.service import ProjectCreate
 from app.modules.requirements.service import ChangeRequestCreate
 from app.modules.workflow.service import TransitionRequest
-from tests.agent_support import BRIEF, DISCOVERY_NOTES, ba_json, compare_output, design_json, draft_items, draft_json, process
+from tests.agent_support import (
+    BRIEF, DISCOVERY_NOTES, ba_json, compare_output, design_json, draft_items, draft_json, feasibility_json, process, security_findings, security_json,
+)
 from tests.support import make_docx
 
 suffix = uuid.uuid4().hex[:6]
@@ -48,6 +50,8 @@ SA_EMAIL = "solution_architect@agents.agentra.local"
 with contextlib.redirect_stderr(io.StringIO()):  # "already exists" is fine: the accounts are shared by every run
     main(["create-agent", "--key", "business_analyst", "--name", "Business Analyst Agent"])
     main(["create-agent", "--key", "solution_architect", "--name", "Solution Architect Agent"])
+    main(["create-agent", "--key", "security_reviewer", "--name", "Security Reviewer Agent"])
+    main(["create-agent", "--key", "developer", "--name", "Developer Agent"])
 
 docx_path = Path(sys.argv[1]).with_name("discovery-notes.docx")
 docx_path.write_bytes(make_docx("Discovery notes", "Leave approvals happen weekly."))
@@ -55,7 +59,8 @@ docx_path.write_bytes(make_docx("Discovery notes", "Leave approvals happen weekl
 
 def change_control_project() -> str:
     """Brief clarified; a failed draft (INC-001) then a good one, approved; CR-001 raised and still open; Phase 7
-    completed; Phase 8 options compared and chosen, design drafted and waiting for review."""
+    completed; Phase 8 options compared and chosen, design drafted, its security review showing a high gap (SC-03)
+    and a clean feasibility review."""
     settings = get_settings()
     policies = load_policies(min_password_length=settings.min_password_length)
     engine = create_db_engine(settings.database_url.get_secret_value())
@@ -151,6 +156,16 @@ def change_control_project() -> str:
     move8(pm, "task", "compare_options", "completed")
     model.add(fake_response(design_json()))
     ask_architect("draft_design")
+
+    design_version = run(lambda s: s.design.current_version_id(project.id))
+    for key, task_key, output in (
+        ("security_reviewer", "review_security", security_json(security_findings(SC_03="high"))),
+        ("developer", "review_feasibility", feasibility_json()),
+    ):
+        run(lambda s, k=key: s.identity.add_member(admin, project.id, f"{k}@agents.agentra.local", "agent"))
+        model.add(fake_response(output))
+        data = AgentRunCreate(agent_key=key, task_key=task_key, artifact_version_id=design_version)
+        process(runner, run(lambda s, d=data: s.executions.request_run(pm, project.id, d)).run.id)
     engine.dispose()
     return str(project.id)
 

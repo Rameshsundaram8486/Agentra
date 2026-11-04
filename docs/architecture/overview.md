@@ -29,6 +29,7 @@ Browser (web/control-center, plain HTML/JS)
 | `executions` | agent runs (linked to workflow tasks, with their inputs), model calls (the spend ledger) | audit, identity, artifacts, workflow, decisions |
 | `requirements` | requirement items, versions and the item ID registry; quality checks; BRD rendering; change requests; traceability | audit, identity, artifacts, decisions, projects |
 | `design` | design items, versions tied to the approved requirements version, design ID registry; coverage, staleness, the solution design document | audit, identity, artifacts, decisions, projects, requirements |
+| `design_reviews` | security and feasibility reviews of a design version and their findings; the review gate before a design is approved; the review documents | audit, identity, artifacts, decisions, projects, requirements, design |
 | `oversight` | incidents and their events (recurrences, root-cause analyses, closure); rules from `config/policies/incident_rules.yaml` | audit, identity |
 | `reporting` | report versions; data built from other modules' records, rendered with Jinja2 templates; visibility from `config/policies/report_visibility.yaml` | all of the above, read-only |
 
@@ -85,7 +86,7 @@ Worker (app/workers/workflow_worker.py) claims the job
 - **The Clarify task cannot be closed while a question it raised is still open** (answer or defer it).
 - Uploaded files are parsed on the host with size, page and decompression limits; the extracted text is what agents read and quote, and the original file is kept by its hash.
 
-## Phase 8 flow (Increment 4a)
+## Phase 8 flow (Increments 4a and 4b)
 
 | Step | Who | Workflow task |
 |---|---|---|
@@ -93,11 +94,15 @@ Worker (app/workers/workflow_worker.py) claims the job
 | Ask the Solution Architect to compare options; it works from the approved requirements only | Owner or project manager; the agent runs | Compare: in progress, then waiting for input |
 | Choose an option in the decision inbox (the agent scores, Agentra totals); close the Compare task | People | Compare: completed (only once its question is answered or deferred) |
 | Ask it to draft the design | Owner or project manager; the agent runs | Draft design: waiting for input (open questions) or waiting for review |
-| Approve the solution design; complete the task; complete Phase 8 | Reviewer or owner (not its author) | Phase 8 completes only if the design is current and covers every confirmed requirement or documents an exception |
+| Ask the Security Reviewer and the Developer to review the current design version | Owner or project manager; the agents run | Security review and Feasibility review: waiting for review |
+| If a high-severity gap or an item rated not feasible blocks it: ask the Solution Architect again; its redraft must answer every gap and concern; review the new version | Owner or project manager; the agents run | Draft design and both reviews go back through changes requested (recorded by Agentra) |
+| Sign off the security review (approve it) | Reviewer only (not an agent, not its author) | |
+| Approve the solution design; complete the three tasks; complete Phase 8 | Reviewer or owner (not its author) | Phase 8 completes only if the design is current, covers every confirmed requirement or documents an exception, and passes the review gate |
 
 - **Coverage is computed by Agentra** from each design item's `satisfies` list and the documented exceptions, against the exact approved requirements version the design names. The traceability matrix's design column comes from it.
 - **Stale designs:** when the approved requirements change (a change request applied), the design is stale: it cannot be approved and Phase 8 cannot complete until it is redrafted against the newly approved requirements. That redraft may replace an approved design, because the approved change request authorised the change.
-- **Cross-module hooks** are wired in `app/composition.py`, never imported across modules: the workflow's named exit check `design_coverage`, the decisions module's approval precondition for `design_baseline`, and the requirements module's design lookup.
+- **The review gate** (`app/modules/design_reviews`): a design version can be approved only with an approved security review of that exact version, no high-severity gap and no item rated not feasible. A security review answers every check in `config/policies/security_checklist.yaml` (its version and hash are recorded) and cannot be signed off with a high gap or once the design has moved on; the sign-off accepts medium and low gaps for that version. The agents may not call the design secure or compliant (checked in code). The review tasks need the design approved before they close, so a later redraft cannot skip a review.
+- **Cross-module hooks** are wired in `app/composition.py`, never imported across modules: the workflow's named exit checks `design_coverage` and `design_reviews`, the decisions module's approval preconditions for `design_baseline` and `security_review`, and the requirements module's design lookup.
 
 ## Reports and incidents
 

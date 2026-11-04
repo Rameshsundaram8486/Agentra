@@ -75,7 +75,10 @@ class RequirementException(BaseModel):
 
 
 class ReviewResponse(BaseModel):
-    approval_id: uuid.UUID
+    """The architect's answer to a reviewer's comment (approval_id) or to a security or feasibility review finding."""
+
+    approval_id: uuid.UUID | None = None
+    finding: str | None = None  # e.g. "Security review v1: SC-03 (gap, high)"
     comment: str
     response: str
 

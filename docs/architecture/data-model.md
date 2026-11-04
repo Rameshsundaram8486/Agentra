@@ -63,6 +63,8 @@ erDiagram
 | `design_versions` | design | One drafted design, tied to one design_baseline document version | The approved requirements version it was designed against (staleness), summary, component and data flow diagrams (Mermaid), documented exceptions, set-level flags, inputs, review responses. **Append-only**. |
 | `design_items` | design | Each component, data flow, interface, entity, security control, environment, architecture decision, risk or open question | Item ID (CMP-001, API-002, ADR-001 ...), label, status derived in code, `satisfies` (requirement IDs), related design items, unverified capabilities, sources, quality flags. **Append-only**. |
 | `design_ids` | design | The design item IDs a project has issued | Never reused. **Append-only**. |
+| `design_reviews` | design_reviews | One security or feasibility review, tied to one review document version and to the exact design version it reviews | Kind, the reviewed design version, the checklist version and hash (security), summary, responses to review comments. **Append-only**. |
+| `design_review_findings` | design_reviews | One answer per checklist item (security) or per design item (feasibility) | Ref (SC-01 or a design item ID), verdict, severity (security gaps) or complexity (feasibility), assessment, recommendation, cited design items and requirements, unverified capabilities. **Append-only**. |
 | `jobs` | infrastructure | Background job queue | One job per `idempotency_key`. Claimed with `FOR UPDATE SKIP LOCKED` under a lease; reclaimed when the lease expires; `dead` after `max_attempts`. |
 | `outbox_messages` | infrastructure | External side effects | Written in the same transaction as the change that causes them. Delivered at least once, and handlers receive the idempotency key. |
 
@@ -79,5 +81,5 @@ erDiagram
 
 ## Planned additions
 
-- Increment 4b: security checklist and sign-off, developer feasibility review, implementation backlog, design change requests, design reports.
-- Later: evals, tool calls.
+- Increment 4c: implementation backlog, design change requests, Phase 8 reports.
+- Later: tool calls.

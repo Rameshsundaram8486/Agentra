@@ -5,6 +5,7 @@ data, so they never depend on each other. Agent tests use the scripted FakeProvi
 model unless AGENTRA_LIVE_TESTS=1 is set (tests/live).
 """
 
+import json
 import uuid
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
@@ -33,11 +34,14 @@ from app.model_gateway.providers.fake import FakeProvider
 from app.modules.artifacts.service import ArtifactCreate
 from app.model_gateway.providers.fake import fake_response
 from app.modules.decisions.service import ApprovalCreate, DecisionOutcomeCreate
+from app.modules.executions.schemas import AgentRunCreate
 from app.modules.errors import InvalidTransitionError
 from app.modules.identity.service import SYSTEM_ACTOR, Actor
 from app.modules.projects.service import ProjectCreate, ProjectView
 from app.modules.workflow.service import TransitionRequest
-from tests.agent_support import BRIEF, DISCOVERY_NOTES, ask, ba_json, draft_items, draft_json, move_task, phase_task, process
+from tests.agent_support import (
+    BRIEF, DISCOVERY_NOTES, ask, ba_json, compare_output, draft_items, draft_json, feasibility_json, move_task, phase_task, process, security_json,
+)
 from tests.support import DEFAULT_PASSWORD, Team, TestUser, alembic_config
 
 
@@ -252,6 +256,28 @@ def sa_agent(run: Callable[..., Any]) -> TestUser:
     return TestUser(actor=run(_get), email=email, password=None)
 
 
+def _agent_account(run: Callable[..., Any], key: str, name: str) -> TestUser:
+    """The account of a built-in agent (one per database, as in a real installation)."""
+    email = f"{key}@agents.agentra.local"
+
+    def _get(s: Services) -> Actor:
+        if s.identity.agent_by_key(key) is None:
+            s.identity.create_user(SYSTEM_ACTOR, email=email, display_name=name, kind="agent", agent_key=key)
+        return s.identity.agent_by_key(key)  # type: ignore[return-value]
+
+    return TestUser(actor=run(_get), email=email, password=None)
+
+
+@pytest.fixture
+def security_agent(run: Callable[..., Any]) -> TestUser:
+    return _agent_account(run, "security_reviewer", "Security Reviewer Agent")
+
+
+@pytest.fixture
+def developer_agent(run: Callable[..., Any]) -> TestUser:
+    return _agent_account(run, "developer", "Developer Agent")
+
+
 @pytest.fixture
 def move_phase(run: Callable[..., Any]) -> Callable[..., None]:
     """move_phase(actor, project_id, phase, *states) applies each transition in turn."""
@@ -401,3 +427,65 @@ def client_for(
     yield _client
     for client in clients:
         client.__exit__(None, None, None)
+
+
+@pytest.fixture
+def option_chosen(phase8: Team, run: Callable[..., Any], runner_for: Callable[..., AgentRunner], model: FakeProvider) -> Team:
+    """Options compared, the recommended option accepted, the compare task closed."""
+    team = phase8
+    requirements = run(lambda s: s.requirements.view(team.owner.actor, team.project.id)).version_id
+    data = AgentRunCreate(agent_key="solution_architect", task_key="compare_options", artifact_version_id=requirements)
+    model.add(fake_response(json.dumps(compare_output())))
+    process(runner_for(), run(lambda s: s.executions.request_run(team.pm.actor, team.project.id, data)).run.id)
+    decision = next(d for d in run(lambda s: s.decisions.list_decisions(team.owner.actor, team.project.id)) if d.title == "Architecture option")
+    run(lambda s: s.decisions.record_outcome(team.owner.actor, decision.id, DecisionOutcomeCreate(action="accept")))
+    move_task(run, team.pm.actor, phase_task(run, team, "compare_options", phase=8), "completed")
+    model.requests.clear()
+    return team
+
+
+@pytest.fixture
+def ask_review(run: Callable[..., Any]) -> Callable[..., Any]:
+    """ask_review(team, "security" | "feasibility", design_version_id=current, actor=PM) -> the run request result."""
+
+    def _ask(team: Team, kind: str, design_version_id: uuid.UUID | None = None, actor: Actor | None = None) -> Any:
+        version_id = design_version_id or run(lambda s: s.design.current_version_id(team.project.id))
+        agent, task = ("security_reviewer", "review_security") if kind == "security" else ("developer", "review_feasibility")
+        data = AgentRunCreate(agent_key=agent, task_key=task, artifact_version_id=version_id)
+        return run(lambda s: s.executions.request_run(actor or team.pm.actor, team.project.id, data))
+
+    return _ask
+
+
+@pytest.fixture
+def review_team(
+    option_chosen: Team, security_agent: TestUser, developer_agent: TestUser, add_member: Callable[..., None]
+) -> Team:
+    """option_chosen, with the Security Reviewer and Developer agents on the team."""
+    add_member(option_chosen.owner, option_chosen.project.id, security_agent, "agent")
+    add_member(option_chosen.owner, option_chosen.project.id, developer_agent, "agent")
+    return option_chosen
+
+
+@pytest.fixture
+def pass_reviews(
+    run: Callable[..., Any], runner_for: Callable[..., AgentRunner], model: FakeProvider, ask_review: Callable[..., Any],
+    security_agent: TestUser, developer_agent: TestUser, add_member: Callable[..., None],
+) -> Callable[[Team], None]:
+    """pass_reviews(team): clean security and feasibility reviews of the current design, the security review signed
+    off by the reviewer. Puts both agents on the team first if they are not on it."""
+
+    def _pass(team: Team) -> None:
+        for agent in (security_agent, developer_agent):
+            if "agent" not in run(lambda s, a=agent: s.identity.roles_for(a.actor, team.project.id)):
+                add_member(team.owner, team.project.id, agent, "agent")
+        model.add(fake_response(security_json()))
+        process(runner_for(), ask_review(team, "security").run.id)
+        model.add(fake_response(feasibility_json()))
+        process(runner_for(), ask_review(team, "feasibility").run.id)
+        review = run(lambda s: s.design_reviews.view(team.owner.actor, team.project.id)).security
+        run(lambda s: s.decisions.record_approval(team.reviewer.actor, review.version_id, ApprovalCreate(
+            decision="approved", content_sha256=s.artifacts.version_record(review.version_id).content_sha256)))
+        model.requests.clear()
+
+    return _pass

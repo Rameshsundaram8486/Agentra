@@ -1,4 +1,5 @@
-"""One real Business Analyst run against the Claude API. Costs money (about $0.15-0.50), so it is skipped
+"""Real agent runs (Business Analyst, Solution Architect, Security Reviewer, Developer) against the Claude API.
+They cost money (about $0.15-1.50 per test), so they are skipped
 unless switched on:
 
     $env:AGENTRA_LIVE_TESTS = "1"; uv run pytest tests/live -q
@@ -213,3 +214,51 @@ def test_solution_architect_compares_options_and_drafts_a_covering_design(
         flags = "; ".join(f.message for f in item.quality_flags)
         print(f"- {item.item_id} [{item.kind}/{item.status}] {item.title} -> {', '.join(item.satisfies) or '-'}" + (f"  <{flags}>" if flags else ""))
     assert design.coverage.gaps == [] and any(i.kind == "security_control" for i in design.items)
+
+
+def test_reviewers_review_a_design_and_the_architect_answers_their_findings(
+    review_team: Team, run: Callable[..., Any], test_settings: Settings, ask_review: Callable[..., Any],
+    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore,
+) -> None:
+    """Three real calls on a small scripted design: the security review, the feasibility review, then a redraft
+    of the design that must answer every gap and concern."""
+    from app.model_gateway.providers.fake import FakeProvider, fake_response
+    from tests.agent_support import design_json
+
+    if test_settings.anthropic_api_key is None:
+        pytest.fail("ANTHROPIC_API_KEY is not set in .env")
+    live = AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, AnthropicProvider(test_settings.anthropic_api_key.get_secret_value())))
+    team = review_team
+    requirements = run(lambda s: s.requirements.view(team.owner.actor, team.project.id))
+    design_request = AgentRunCreate(agent_key="solution_architect", task_key="draft_design", artifact_version_id=requirements.version_id)
+    scripted = AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, FakeProvider([fake_response(design_json())])))
+    queued = run(lambda s: s.executions.request_run(team.pm.actor, team.project.id, design_request)).run
+    scripted.handle(ClaimedJob(uuid.uuid4(), "agent_run", {"agent_run_id": str(queued.id)}, "live", 1))
+
+    def go(queued: Any, label: str) -> Any:
+        live.handle(ClaimedJob(uuid.uuid4(), "agent_run", {"agent_run_id": str(queued.id)}, "live", 1))
+        detail = run(lambda s: s.executions.get_run(team.owner.actor, queued.id))
+        call = detail.model_calls[0] if detail.model_calls else None
+        print(f"\n{label}: status={detail.status} cost=${detail.cost_usd} out_tokens={call.output_tokens if call else '-'} latency={call.latency_ms if call else '-'}ms")
+        for finding in detail.findings:
+            print(f"  finding: {finding.severity} {finding.check} {finding.path}: {finding.message}")
+        assert detail.status == "succeeded", f"{detail.error_code}: {detail.error_message}"
+        return detail
+
+    go(ask_review(team, "security").run, "review_security")
+    go(ask_review(team, "feasibility").run, "review_feasibility")
+    reviews = run(lambda s: s.design_reviews.view(team.owner.actor, team.project.id))
+    for review in (reviews.security, reviews.feasibility):
+        print(f"{review.artifact_title} v{review.version_no}: {review.counts}; blocking: {review.blocking}")
+        for f in review.findings:
+            print(f"- {f.ref} {f.verdict}{' ' + f.severity if f.severity else ''}{' ' + f.complexity if f.complexity else ''}: {f.assessment[:140]}")
+    assert len(reviews.security.findings) == len(policies.security_checklist.checks)
+    print(f"gate: {reviews.gate}")
+
+    open_count = sum(1 for r in (reviews.security, reviews.feasibility) for f in r.findings if f.verdict in ("gap", "concerns", "not_feasible"))
+    go(run(lambda s: s.executions.request_run(team.owner.actor, team.project.id, design_request)).run, "draft_design (answers the findings)")
+    design = run(lambda s: s.design.view(team.owner.actor, team.project.id))
+    print(f"design v{design.version_no}: {len(design.items)} items; {len(design.review_responses)} responses to {open_count} findings")
+    for response in design.review_responses:
+        print(f"- {response.finding}: {response.response[:160]}")
+    assert design.version_no == 2 and len(design.review_responses) == open_count

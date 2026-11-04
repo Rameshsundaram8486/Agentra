@@ -1,6 +1,7 @@
 """What the Solution Architect agent reads, gathered the same way for both of its tasks: the approved requirement
 items, the brief and source documents (as untrusted data), the decisions it may build on, and for the design
-task the current design items and review comments. Citations to requirements and decisions need no quote;
+task the current design items, review comments, and the open findings of the security and feasibility reviews
+of the current design. Citations to requirements and decisions need no quote;
 citations to documents are checked against exactly what the model was shown."""
 
 import uuid
@@ -28,6 +29,7 @@ class Gathered:
     document_names: dict[str, str] = field(default_factory=dict)
     decisions: dict[str, tuple[uuid.UUID, str, str | None]] = field(default_factory=dict)
     reviews: dict[str, tuple[uuid.UUID, str]] = field(default_factory=dict)
+    review_findings: dict[str, Any] = field(default_factory=dict)  # FND-n -> OpenFinding
     current_design: list[Any] = field(default_factory=list)
 
 
@@ -78,6 +80,15 @@ def gather(services: Services, run: StartedRun, definition: TaskDefinition, *, d
             verdict = "requested changes" if approval.decision == "changes_requested" else "rejected the design"
             review_lines.append(f"{ref} ({approval.approver_name or 'a reviewer'} {verdict} on v{approval.version_no}): {approval.comment or ''}")
         gathered.current_design = services.design.current_items(run.project_id)
+        open_findings = services.design_reviews.open_findings(run.project_id, (uuid.UUID(v) for v in run.input_refs.get("findings", [])))
+        finding_lines = []
+        for number, finding in enumerate(open_findings, start=1):
+            ref = f"FND-{number}"
+            gathered.review_findings[ref] = finding
+            line = f"{ref} ({finding.label}) {finding.title}: {finding.assessment}"
+            if finding.recommendation:
+                line += f" | Recommended: {finding.recommendation}"
+            finding_lines.append(line)
 
     notes = ""
     if any(f.check == "injection" for f in gathered.findings):
@@ -96,6 +107,10 @@ def gather(services: Services, run: StartedRun, definition: TaskDefinition, *, d
         ]
         parts.append("Current design items (keep an item's ID as its ref to keep it):\n" + ("\n".join(current) if current else "None yet: this is the first draft."))
         parts.append("Review comments on the current design:\n" + ("\n".join(review_lines) if review_lines else "None."))
+        parts.append(
+            "Findings of the security and feasibility reviews of the current design (answer each by its FND reference):\n"
+            + ("\n".join(finding_lines) if finding_lines else "None.")
+        )
     parts.append("Produce the output as described in your instructions.")
     gathered.text = "\n\n".join(parts)
     gathered.sources = Sources(

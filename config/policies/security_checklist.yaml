@@ -1,0 +1,45 @@
+# Security checklist for Phase 8 design reviews (Increment 4b).
+#
+# The Security Reviewer agent answers every check for one design version: addressed (citing the design items
+# that address it), gap (with a severity and a recommended fix) or not_applicable (with the reason). A person
+# with the reviewer role then approves the review document (config/policies/approval_matrix.yaml).
+# Rules enforced in code (app/modules/design_reviews), not by the agent:
+#   - every check is answered exactly once, and only checks listed here;
+#   - addressed cites at least one design item ID of the reviewed version;
+#   - a review with a high-severity gap cannot be approved, and a design version can be approved only with an
+#     approved security review of that exact version (medium and low gaps are accepted by that approval).
+# Change a check's wording freely; renaming or removing an ID changes which checks earlier reviews answered,
+# so bump the version. The version and file hash are recorded on every review.
+version: 1
+
+checks:
+  SC-01:
+    title: Sign-in and identity
+    question: How do people, and any services or integrations, prove who they are? Is single sign-on or multi-factor sign-in used where the requirements or risks call for it?
+  SC-02:
+    title: Authorisation and least privilege
+    question: Who may see and do what, and is it enforced on the server? Do roles, service accounts and admin rights follow least privilege?
+  SC-03:
+    title: Data protection in transit and at rest
+    question: Is data encrypted on every network path and where it is stored, including backups and exports?
+  SC-04:
+    title: Secrets and keys
+    question: Where are passwords, keys, connection strings and certificates kept, and who can read or rotate them? Nothing secret in code, configuration files or logs.
+  SC-05:
+    title: Input validation and injection
+    question: Is input from people, files and integrations validated on the server, and are injection risks (for example in queries, formulas, scripts or files) handled?
+  SC-06:
+    title: Audit logging and monitoring
+    question: Are security-relevant actions (sign-in, approvals, permission changes, data exports) recorded with who and when, kept long enough and watched?
+  SC-07:
+    title: Error handling
+    question: Do failures fail safely, without exposing internal details or personal data to users?
+  SC-08:
+    title: Personal data and retention
+    question: Which personal or sensitive data is held, is it limited to what is needed, who can see it, and how long is it kept before deletion?
+  SC-09:
+    title: Integrations and third parties
+    question: For each external system or service, what access does it get, how is the connection secured, and what happens if it is unavailable or compromised?
+  SC-10:
+    title: Backup, recovery and availability
+    question: How is data backed up and restored, and does that meet the availability and recovery needs in the requirements?

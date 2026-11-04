@@ -52,19 +52,6 @@ def _sa_task(run: Run, team: Team, key: str) -> Any:
     return phase_task(run, team, key, phase=8)
 
 
-@pytest.fixture
-def option_chosen(phase8: Team, run: Run, runner_for: Callable[..., AgentRunner], model: FakeProvider) -> Team:
-    """Options compared, the recommended option accepted, the compare task closed."""
-    team = phase8
-    model.add(fake_response(json.dumps(compare_output())))
-    process(runner_for(), _ask_sa(run, team, "compare_options").run.id)
-    decision = next(d for d in run(lambda s: s.decisions.list_decisions(team.owner.actor, team.project.id)) if d.title == "Architecture option")
-    run(lambda s: s.decisions.record_outcome(team.owner.actor, decision.id, DecisionOutcomeCreate(action="accept")))
-    move_task(run, team.pm.actor, _sa_task(run, team, "compare_options"), "completed")
-    model.requests.clear()
-    return team
-
-
 # Compare options -------------------------------------------------------------------------------------
 
 def test_options_are_scored_by_the_agent_and_totalled_by_agentra(
@@ -192,12 +179,14 @@ def test_designs_with_unknown_requirements_or_items_save_nothing(
 
 
 def _complete_phase_8(run: Run, team: Team) -> Any:
+    for key in ("draft_design", "review_security", "review_feasibility"):
+        move_task(run, team.reviewer.actor, _sa_task(run, team, key), "completed")
     _move_phase(run, team.pm.actor, team, 8, "waiting_for_review")
     return _move_phase(run, team.reviewer.actor, team, 8, "completed")
 
 
 def test_phase_8_cannot_complete_while_a_confirmed_requirement_is_uncovered(
-    option_chosen: Team, run: Run, runner_for: Callable[..., AgentRunner], model: FakeProvider
+    option_chosen: Team, run: Run, runner_for: Callable[..., AgentRunner], model: FakeProvider, pass_reviews: Callable[[Team], None]
 ) -> None:
     team = option_chosen
     items = design_items()
@@ -208,15 +197,15 @@ def test_phase_8_cannot_complete_while_a_confirmed_requirement_is_uncovered(
     view = _design(run, team)
     assert view.coverage.gaps == ["REQ-F-003"]
     assert "1 confirmed requirement(s) not covered: REQ-F-003" in [f.message for f in view.set_flags]
+    pass_reviews(team)
     _approve(run, team.reviewer, view.version_id)
-    move_task(run, team.reviewer.actor, _sa_task(run, team, "draft_design"), "completed")
 
     with pytest.raises(InvalidTransitionError, match="not covered by the design and without a documented exception: REQ-F-003"):
         _complete_phase_8(run, team)
 
 
 def test_a_documented_exception_counts_as_covered_and_the_phase_completes(
-    option_chosen: Team, run: Run, runner_for: Callable[..., AgentRunner], model: FakeProvider
+    option_chosen: Team, run: Run, runner_for: Callable[..., AgentRunner], model: FakeProvider, pass_reviews: Callable[[Team], None]
 ) -> None:
     team = option_chosen
     items = design_items()
@@ -227,8 +216,8 @@ def test_a_documented_exception_counts_as_covered_and_the_phase_completes(
     process(runner_for(), _ask_sa(run, team, "draft_design").run.id)
     view = _design(run, team)
     assert (view.coverage.gaps, view.coverage.excepted) == ([], 1)
+    pass_reviews(team)
     _approve(run, team.reviewer, view.version_id)
-    move_task(run, team.reviewer.actor, _sa_task(run, team, "draft_design"), "completed")
 
     assert _complete_phase_8(run, team).state == "completed"
 

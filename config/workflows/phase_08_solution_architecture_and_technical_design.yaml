@@ -1,7 +1,10 @@
 # Phase 8 - Solution Architecture and Technical Design: states, tasks, entry/exit gates, required approvals. Primary agent: solution_architect.
 # The agent tasks behind these are in config/agents/solution_architect/agent.yaml (workflow_task).
 # design_coverage: the current design is not stale and covers every confirmed requirement, or documents why not.
-# Security sign-off, feasibility review and the implementation backlog arrive with Increment 4b.
+# design_reviews: the current design has an approved security review and a feasibility review of that exact
+#   version, with no high-severity security gap and nothing rated not feasible (also checked when the design
+#   is approved). The review tasks close only once the design is approved, so a redraft cannot skip a review.
+# The implementation backlog, design change requests and Phase 8 reports arrive with Increment 4c.
 key: phase_08_solution_architecture_and_technical_design
 version: 1
 phase: 8
@@ -13,7 +16,7 @@ entry:
   requires_completed_phases: [7]
 exit:
   required_approvals: [design_baseline]
-  checks: [design_coverage]
+  checks: [design_coverage, design_reviews]
 tasks:
   - key: compare_options
     title: Compare solution options
@@ -22,5 +25,15 @@ tasks:
   - key: draft_design
     title: Draft and review the design
     agent: solution_architect
+    depends_on: [compare_options]
+    required_approvals: [design_baseline]
+  - key: review_security
+    title: Security review of the design
+    agent: security_reviewer
+    depends_on: [compare_options]
+    required_approvals: [security_review, design_baseline]
+  - key: review_feasibility
+    title: Feasibility review of the design
+    agent: developer
     depends_on: [compare_options]
     required_approvals: [design_baseline]

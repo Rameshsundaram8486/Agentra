@@ -481,11 +481,66 @@ async function enableReports(canGenerate) {
 
 // Solution design ---------------------------------------------------------------------------
 
+let currentDesign = null;
+
+const VERDICTS = {
+  addressed: "Addressed",
+  gap: "Gap",
+  not_applicable: "Not applicable",
+  feasible: "Feasible",
+  concerns: "Concerns",
+  not_feasible: "Not feasible",
+};
+
+function reviewBlock(review, title, missing) {
+  if (!review) return h("div", { class: "review-block" }, h("h3", {}, title), h("p", { class: "muted small" }, missing));
+  const counts = Object.entries(review.counts).map(([verdict, count]) => `${count} ${(VERDICTS[verdict] ?? verdict).toLowerCase()}`).join(", ");
+  const open = review.findings.filter((f) => ["gap", "concerns", "not_feasible"].includes(f.verdict));
+  return h(
+    "div",
+    { class: "review-block" },
+    h(
+      "div",
+      { class: "section-header" },
+      h("a", { class: "primary", href: `artifact.html?id=${encodeURIComponent(review.artifact_id)}` }, `${review.artifact_title} v${review.version_no}`),
+      review.kind === "security" ? statusBadge(review.approval_status) : null, // the sign-off; feasibility needs no approval
+    ),
+    h("p", { class: "muted small" }, `Reviews design v${review.design_version_no}${review.current ? "" : " (not the current design: review again)"}. ${counts}.`),
+    review.checklist ? h("p", { class: "muted small" }, `Checklist: ${review.checklist}.`) : null,
+    h("p", {}, review.summary),
+    ...review.blocking.map((line) => h("div", { class: "alert alert-error", role: "alert" }, `${line}. The design cannot be approved until a redraft resolves this.`)),
+    open.length
+      ? h(
+          "ul",
+          { class: "small" },
+          ...open.map((f) =>
+            h("li", {}, `${f.ref} ${f.title}: ${VERDICTS[f.verdict]}${f.severity ? ` (${f.severity})` : ""}${f.complexity ? ` (${f.complexity})` : ""}. ${f.recommendation}`),
+          ),
+        )
+      : null,
+  );
+}
+
+async function loadDesignReviews() {
+  const reviews = await api(`/api/projects/${encodeURIComponent(projectId)}/design/reviews`);
+  const gate = reviews.gate.length
+    ? h("div", { class: "small" }, h("strong", {}, "Before this design version can be approved: "), reviews.gate.join("; "), ".")
+    : h("p", { class: "small" }, "Both reviews of this design version are in place; it can be approved.");
+  document.getElementById("design-reviews").replaceChildren(
+    h("h3", {}, "Reviews"),
+    gate,
+    reviewBlock(reviews.security, "Security review", "Not reviewed yet: ask the Security Reviewer. A reviewer signs the review off by approving it."),
+    reviewBlock(reviews.feasibility, "Feasibility review", "Not reviewed yet: ask the Developer."),
+  );
+}
+
 async function loadDesign() {
   const view = await api(`/api/projects/${encodeURIComponent(projectId)}/design`);
+  currentDesign = view;
   const section = document.getElementById("design-section");
   section.hidden = !view;
   if (!view) return;
+  await loadDesignReviews();
   const coverage = view.coverage;
   const parts = [
     h(
@@ -504,7 +559,7 @@ async function loadDesign() {
       `Coverage: ${coverage.covered} of ${coverage.confirmed} confirmed requirements covered; ${coverage.excepted} with a documented exception` +
         (coverage.gaps.length ? `; not covered: ${coverage.gaps.join(", ")} (Phase 8 cannot complete until they are).` : "."),
     ),
-    ...view.review_responses.map((r) => h("div", { class: "small" }, `Review comment "${r.comment}": ${r.response}`)),
+    ...view.review_responses.map((r) => h("div", { class: "small" }, `${r.finding ?? "Review comment"} "${r.comment}": ${r.response}`)),
     ...flagLines(view.set_flags),
   ];
   document.getElementById("design-summary").replaceChildren(...parts.filter(Boolean));
@@ -595,12 +650,14 @@ function enableUpload() {
 
 // Agent ----------------------------------------------------------------------------------------
 
-// Each task and what it works from: a project brief (Phase 7) or the approved requirements (Phase 8).
+// Each task and what it works from: a project brief (Phase 7), the approved requirements or the current design (Phase 8).
 const AGENT_TASKS = [
   { agent: "business_analyst", task: "clarify_brief", label: "Business Analyst: ask about the brief", input: "brief" },
   { agent: "business_analyst", task: "draft_requirements", label: "Business Analyst: draft the requirements", input: "brief" },
   { agent: "solution_architect", task: "compare_options", label: "Solution Architect: compare solution options", input: "requirements" },
   { agent: "solution_architect", task: "draft_design", label: "Solution Architect: draft the design", input: "requirements" },
+  { agent: "security_reviewer", task: "review_security", label: "Security Reviewer: review the design's security", input: "design" },
+  { agent: "developer", task: "review_feasibility", label: "Developer: review the design's feasibility", input: "design" },
 ];
 let projectBriefs = [];
 
@@ -617,6 +674,12 @@ function fillInputs() {
   if (choice.input === "brief") {
     options = projectBriefs.map((brief) => h("option", { value: brief.current_version.id }, `${brief.title} (v${brief.current_version_no})`));
     missing = "Add a document of type Project brief first; the agent works from it.";
+  } else if (choice.input === "design") {
+    if (currentDesign && !currentDesign.stale) {
+      options = [h("option", { value: currentDesign.version_id }, `${currentDesign.artifact_title} v${currentDesign.version_no}`)];
+    } else {
+      missing = currentDesign ? "The design is stale; have the Solution Architect redraft it first." : "Reviews work from the solution design; have the Solution Architect draft it first.";
+    }
   } else if (currentRequirements && currentRequirements.approval_status === "approved") {
     options = [h("option", { value: currentRequirements.version_id }, `${currentRequirements.artifact_title} v${currentRequirements.version_no} (approved)`)];
   } else {

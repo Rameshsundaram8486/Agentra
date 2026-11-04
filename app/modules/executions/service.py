@@ -165,7 +165,16 @@ class ExecutionsService:
             winner = next(r for r in repository.runs_for_input(self._session, task.agent_key, task.key, record.id) if r.status in _ACTIVE)
             return RunRequestResult(run=self._views([winner])[0], created=False)
         if workflow_task is not None:
-            self._start_task(workflow_task, f"Asked the {task.agent_name}: {task.spec.title}", actor, agent, reviewed=bool(context["reviews"]))
+            # Why Agentra may send a task waiting for review back itself: comments or findings to answer, or a new
+            # version of what the task works from (for example a redrafted design to review again).
+            system_reason = None
+            if context["reviews"] or context.get("findings"):
+                system_reason = "A reviewer requested changes on the document, or a review has findings to answer"
+            else:
+                done = [r for r in repository.runs_for_task(self._session, workflow_task.id) if r.status == "succeeded"]
+                if done and done[-1].input_artifact_version_id != record.id:
+                    system_reason = f"There is a new version to work from: '{record.artifact_title}' v{record.version_no}"
+            self._start_task(workflow_task, f"Asked the {task.agent_name}: {task.spec.title}", actor, agent, system_reason=system_reason)
         run.job_id = JobQueue(self._session, self._clock).enqueue(
             AGENT_RUN_JOB, {"agent_run_id": str(run.id)}, run.idempotency_key, max_attempts=task.spec.max_attempts
         )
@@ -459,15 +468,21 @@ class ExecutionsService:
                     for review in sorted(history, key=lambda r: r.created_at)
                     if review.artifact_version_id == record.id and review.decision != "approved"
                 ]
-        return {"documents": documents, "decisions": decisions, "reviews": reviews}
+        context: dict[str, Any] = {"documents": documents, "decisions": decisions, "reviews": reviews}
+        if task.spec.context_findings_of:
+            # The current review versions; the task itself picks out the open findings on the current design.
+            context["findings"] = [
+                str(record.id) for artifact_type in task.spec.context_findings_of for record in self._artifacts.current_records_of_type(project_id, artifact_type)
+            ]
+        return context
 
-    def _start_task(self, task: TaskView, reason: str, requester: Actor, agent: Actor, *, reviewed: bool = False) -> None:
+    def _start_task(self, task: TaskView, reason: str, requester: Actor, agent: Actor, *, system_reason: str | None = None) -> None:
         """Moves the task to in_progress, each step as the requester, or as the agent where only it may. A task
-        waiting for review goes back through changes_requested; when a reviewer has already asked for changes
-        on the document, Agentra records that step itself."""
+        waiting for review goes back through changes_requested; when there is a recorded reason for that (review
+        comments or findings to answer, or a new input version), Agentra records that step itself."""
         for target in _START_PATHS[task.state]:
-            if target == "changes_requested" and reviewed:
-                self._move_task(task.id, target, SYSTEM_ACTOR, "A reviewer requested changes on the document", strict=True)
+            if target == "changes_requested" and system_reason:
+                self._move_task(task.id, target, SYSTEM_ACTOR, system_reason, strict=True)
                 continue
             try:
                 self._move_task(task.id, target, requester, reason, strict=True)

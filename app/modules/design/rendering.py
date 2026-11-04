@@ -49,9 +49,10 @@ def render_design(
     lines += [f"- {ref}" for ref in input_refs]
     lines += ["", f"> {_NOTE}", "", "## Summary", "", summary.strip(), ""]
     if review_responses:
-        lines += ["## Changes in this version", "", "Responses to the review comments on the previous version:", ""]
+        lines += ["## Changes in this version", "", "Responses to the review comments and findings on the previous version:", ""]
         for response in review_responses:
-            lines += [f"- Review comment: \"{' '.join(response.comment.split())}\"", f"  Response: {response.response.strip()}"]
+            heading = response.finding or "Review comment"
+            lines += [f"- {heading}: \"{' '.join(response.comment.split())}\"", f"  Response: {response.response.strip()}"]
         lines.append("")
     lines += _mermaid("Component diagram", component_diagram)
     lines += _mermaid("Data flow diagram", data_flow_diagram)

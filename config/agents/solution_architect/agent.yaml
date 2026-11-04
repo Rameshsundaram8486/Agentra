@@ -43,6 +43,7 @@ tasks:
     context_artifact_types: [project_brief, source_document]
     context_decisions_from: [business_analyst.clarify_brief, business_analyst.draft_requirements, compare_options, draft_design]
     context_reviews_of: [design_baseline]
-    prompt: prompts/draft_design.v1.md
+    context_findings_of: [security_review, feasibility_review]
+    prompt: prompts/draft_design.v2.md
     output_schema: schemas/draft_design.v1.json
     max_attempts: 2

@@ -273,3 +273,60 @@ def design_json(items: list[dict[str, Any]] | None = None, **changes: Any) -> st
     }
     output.update(changes)
     return json.dumps(output)
+
+
+# Scripted Security Reviewer and Developer outputs (Phase 8 reviews). The design from design_items() gets the IDs
+# CMP-001, API-001, ENT-001, SEC-001, ENV-001 and ADR-001.
+
+DESIGN_IDS = ["CMP-001", "API-001", "ENT-001", "SEC-001", "ENV-001", "ADR-001"]
+CHECK_IDS = [f"SC-{n:02d}" for n in range(1, 11)]
+
+
+def sfinding(check: str, verdict: str = "addressed", severity: str | None = None, items: list[str] | None = None, **changes: Any) -> dict[str, Any]:
+    finding = {
+        "check": check, "verdict": verdict, "severity": severity,
+        "assessment": f"{check}: the design handles this in {', '.join(items or ['SEC-001'])}." if verdict == "addressed" else f"{check}: not handled by the design.",
+        "recommendation": "Add a security control for it." if verdict == "gap" else "",
+        "design_items": (items or ["SEC-001"]) if verdict == "addressed" else [],
+        "requirements": [], "unverified_capabilities": [],
+    }
+    finding.update(changes)
+    return finding
+
+
+def security_findings(**gaps: str) -> list[dict[str, Any]]:
+    """Every check addressed, except the checks given as gaps: security_findings(SC_03="high")."""
+    gaps = {key.replace("_", "-"): severity for key, severity in gaps.items()}
+    return [sfinding(c, "gap", gaps[c]) if c in gaps else sfinding(c) for c in CHECK_IDS]
+
+
+def security_json(findings: list[dict[str, Any]] | None = None, **changes: Any) -> str:
+    output = {"summary": "Sign-in and access are handled by Microsoft 365; data retention needs detail.", "findings": findings if findings is not None else security_findings(),
+              "review_responses": []}
+    output.update(changes)
+    return json.dumps(output)
+
+
+def ffinding(item: str, verdict: str = "feasible", complexity: str = "M", **changes: Any) -> dict[str, Any]:
+    finding = {
+        "design_item": item, "verdict": verdict, "complexity": complexity, "assessment": f"{item} can be built with Power Apps.",
+        "recommendation": "" if verdict == "feasible" else "Run a one-day spike first.", "related_items": [], "unverified_capabilities": [],
+    }
+    finding.update(changes)
+    return finding
+
+
+def feasibility_json(findings: list[dict[str, Any]] | None = None, **changes: Any) -> str:
+    output = {"summary": "Buildable by the two-person team in about six weeks.", "findings": findings if findings is not None else [ffinding(i) for i in DESIGN_IDS],
+              "review_responses": []}
+    output.update(changes)
+    return json.dumps(output)
+
+
+def kept_design_items() -> list[dict[str, Any]]:
+    """design_items() as a redraft that keeps every existing ID."""
+    items = design_items()
+    ids = dict(zip([item["ref"] for item in items], DESIGN_IDS))
+    for item in items:
+        item["ref"], item["related"] = ids[item["ref"]], [ids[ref] for ref in item["related"]]
+    return items

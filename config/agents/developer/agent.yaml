@@ -1,2 +1,28 @@
-# Developer Agent: code/configuration and unit tests inside sandbox VMs (Phase 9; defect fixes 10, 11). Defines: mission, phases, tools, permissions, risk class, autonomy level, effort, escalation, completion criteria.
-# Scaffold only: not implemented yet.
+# Developer Agent: implementation feasibility in Phase 8; code, configuration and unit tests inside sandbox VMs
+# in Phase 9 (not built yet). Loaded by app/harness/registry.py; the code is in app/agents/developer/.
+# Model, effort and token limits are in config/models.yaml.
+version: 1
+key: developer
+name: Developer Agent
+mission: >
+  Give implementation feedback on the solution design before it is approved: whether each design item can be
+  built as described with the chosen technology, how complex it is, and what concerns or unverified
+  capabilities need settling first.
+phases: [8]
+autonomy: supervised
+risk_class: low
+
+tasks:
+  review_feasibility:
+    title: Review the design's feasibility
+    description: >
+      Rates every design item of one design version as feasible, feasible with concerns, or not feasible as
+      described, with a complexity estimate (S, M or L) and the concerns behind the rating.
+    phase: 8
+    workflow_task: review_feasibility
+    phase_states: [in_progress, waiting_for_input]
+    input_artifact_types: [design_baseline]
+    context_reviews_of: [feasibility_review]
+    prompt: prompts/review_feasibility.v1.md
+    output_schema: schemas/review_feasibility.v1.json
+    max_attempts: 2

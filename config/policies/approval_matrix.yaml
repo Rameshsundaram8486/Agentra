@@ -32,6 +32,14 @@ artifact_types:
     title: Design baseline
     approver_roles: [reviewer, owner]
     independent_review: true
+  security_review:
+    title: Security review
+    approver_roles: [reviewer]  # the security sign-off (Increment 4b); a design needs it for its exact version
+    independent_review: true
+  feasibility_review:
+    title: Feasibility review
+    approver_roles: [reviewer, owner]
+    independent_review: true
   implementation_report:
     title: Implementation report
     approver_roles: [reviewer, owner]

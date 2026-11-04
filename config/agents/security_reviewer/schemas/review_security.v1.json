@@ -1,0 +1,121 @@
+{
+  "$comment": "Output of security_reviewer.review_security. Sent to the model as the structured output format; every check answered once, citations, severities and fixes are enforced in code (app/modules/design_reviews/rules.py).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "findings",
+    "review_responses"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "A few sentences on the overall security posture of the design and what most needs attention."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      },
+      "description": "One answer per checklist check, in checklist order."
+    },
+    "review_responses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/review_response"
+      }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "check",
+        "verdict",
+        "severity",
+        "assessment",
+        "recommendation",
+        "design_items",
+        "requirements",
+        "unverified_capabilities"
+      ],
+      "properties": {
+        "check": {
+          "type": "string",
+          "description": "The checklist ID, e.g. SC-01."
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "addressed",
+            "gap",
+            "not_applicable"
+          ]
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Gaps only; null otherwise."
+        },
+        "assessment": {
+          "type": "string",
+          "description": "What the design does about this check, citing design item IDs; for not_applicable, why it does not apply."
+        },
+        "recommendation": {
+          "type": "string",
+          "description": "For a gap: the change to the design that would close it. Empty otherwise."
+        },
+        "design_items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of the design items this answer rests on (required for addressed)."
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of related requirements, if any."
+        },
+        "unverified_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Product or platform capabilities this answer assumes but the inputs do not confirm."
+        }
+      }
+    },
+    "review_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "response"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "REV-n of the review comment answered."
+        },
+        "response": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

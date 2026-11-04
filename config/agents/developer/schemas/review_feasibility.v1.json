@@ -1,0 +1,106 @@
+{
+  "$comment": "Output of developer.review_feasibility. Sent to the model as the structured output format; one rating per design item (open questions excepted) and citations are enforced in code (app/modules/design_reviews/rules.py).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "findings",
+    "review_responses"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "A few sentences on how buildable the design is, the overall effort, and the main concerns."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      },
+      "description": "One rating per design item except open questions, in design order."
+    },
+    "review_responses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/review_response"
+      }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "design_item",
+        "verdict",
+        "complexity",
+        "assessment",
+        "recommendation",
+        "related_items",
+        "unverified_capabilities"
+      ],
+      "properties": {
+        "design_item": {
+          "type": "string",
+          "description": "The design item ID, e.g. CMP-001."
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "feasible",
+            "concerns",
+            "not_feasible"
+          ]
+        },
+        "complexity": {
+          "type": "string",
+          "enum": [
+            "S",
+            "M",
+            "L"
+          ],
+          "description": "Implementation effort: S (days), M (one to two weeks), L (more)."
+        },
+        "assessment": {
+          "type": "string",
+          "description": "Why it can or cannot be built as described with the chosen technology."
+        },
+        "recommendation": {
+          "type": "string",
+          "description": "For concerns or not_feasible: what would resolve it. Empty otherwise."
+        },
+        "related_items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of other design items this rating depends on."
+        },
+        "unverified_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Capabilities the rating assumes but the inputs do not confirm."
+        }
+      }
+    },
+    "review_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "response"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "REV-n of the review comment answered."
+        },
+        "response": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

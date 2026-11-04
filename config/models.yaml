@@ -37,6 +37,14 @@ agents:
       draft_design:
         max_tokens: 64000   # a full design with coverage of every requirement is long
 
+  security_reviewer:
+    effort: high
+    max_tokens: 24000
+
+  developer:
+    effort: high
+    max_tokens: 32000   # one assessment per design item
+
 budget:
   monthly_usd: 50
 

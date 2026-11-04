@@ -1,2 +1,30 @@
-# Security Reviewer: checklist-driven security review of designs and changes (Phase 8+). Defines: mission, phases, tools, permissions, risk class, autonomy level, effort, escalation, completion criteria.
-# Scaffold only: not implemented yet.
+# Security Reviewer: checklist-driven security review of designs (Phase 8; later changes too).
+# Loaded by app/harness/registry.py; the code is in app/agents/security_reviewer/. The checklist is
+# config/policies/security_checklist.yaml. Model, effort and token limits are in config/models.yaml.
+# The agent assesses; a person with the reviewer role signs the review off. It never decides a design is secure.
+version: 1
+key: security_reviewer
+name: Security Reviewer Agent
+mission: >
+  Review each version of the solution design against the security checklist: say which design items address
+  each check, where the gaps are and how serious they are, and what would close them, so that a person can sign
+  the review off before the design is approved.
+phases: [8]
+autonomy: supervised
+risk_class: low
+
+tasks:
+  review_security:
+    title: Review the design's security
+    description: >
+      Answers every check in the security checklist for one design version (addressed, gap or not applicable),
+      citing the design items and requirements behind each answer, with a severity and a recommended fix for
+      each gap.
+    phase: 8
+    workflow_task: review_security
+    phase_states: [in_progress, waiting_for_input]
+    input_artifact_types: [design_baseline]
+    context_reviews_of: [security_review]
+    prompt: prompts/review_security.v1.md
+    output_schema: schemas/review_security.v1.json
+    max_attempts: 2

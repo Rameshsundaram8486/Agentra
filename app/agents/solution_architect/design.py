@@ -97,13 +97,14 @@ class DraftDesign:
                 "document_names": gathered.document_names,
                 "decisions": gathered.decisions,
                 "reviews": gathered.reviews,
+                "findings": gathered.review_findings,
                 "known_ids": {item.item_id: item.kind for item in gathered.current_design},
             },
         )
 
     def check(self, output: DraftDesignOutput, prepared: PreparedPrompt) -> list[Finding]:  # type: ignore[override]
         """IDs are the server's; links stay inside the output; requirement IDs must exist in the approved version;
-        every review comment gets exactly one response."""
+        every review comment and review finding gets exactly one response."""
         known: dict[str, str] = prepared.extras["known_ids"]
         requirement_ids: set[str] = prepared.extras["requirement_ids"]
         findings, seen = [], set()
@@ -127,19 +128,27 @@ class DraftDesign:
         for index, exception in enumerate(output.exceptions):
             if exception.requirement_id not in requirement_ids:
                 findings.append(Finding("requirement_ref", "block", f"Exception for {exception.requirement_id!r}, which is not an approved requirement ID", f"exceptions[{index}]"))
-        reviews = prepared.extras["reviews"]
+        to_answer = [*prepared.extras["reviews"], *prepared.extras["findings"]]
         answered = [reply.ref for reply in output.review_responses]
-        for ref in reviews:
+        for ref in to_answer:
             if answered.count(ref) != 1:
-                findings.append(Finding("review", "block", f"Review comment {ref} needs exactly one response (it has {answered.count(ref)})", "review_responses"))
-        for ref in sorted(set(answered) - set(reviews)):
-            findings.append(Finding("review", "block", f"Responds to {ref}, which is not a review comment it was given", "review_responses"))
+                what = "Review finding" if ref.startswith("FND-") else "Review comment"
+                findings.append(Finding("review", "block", f"{what} {ref} needs exactly one response (it has {answered.count(ref)})", "review_responses"))
+        for ref in sorted(set(answered) - set(to_answer)):
+            findings.append(Finding("review", "block", f"Responds to {ref}, which is not a review comment or finding it was given", "review_responses"))
         return findings
 
     def apply(self, services: Services, run: StartedRun, output: DraftDesignOutput, prepared: PreparedPrompt) -> ApplyResult:  # type: ignore[override]
         extras = prepared.extras
         decisions: dict[str, tuple[uuid.UUID, str, str | None]] = extras["decisions"]
         reviews: dict[str, tuple[uuid.UUID, str]] = extras["reviews"]
+        review_findings = extras["findings"]
+
+        def response(ref: str, text: str) -> ReviewResponse:
+            if ref in reviews:
+                return ReviewResponse(approval_id=reviews[ref][0], comment=reviews[ref][1], response=text)
+            finding = review_findings[ref]
+            return ReviewResponse(finding=finding.label, comment=f"{finding.title}: {finding.assessment}", response=text)
 
         def source(c: Citation) -> DesignSource:
             if c.ref in decisions:
@@ -174,11 +183,9 @@ class DraftDesign:
             + [f"{ref}: decision '{title}' ({answer or 'not answered yet'})" for ref, (_, title, answer) in decisions.items()],
             change_summary=(
                 f"{'Revised' if extras['known_ids'] else 'Drafted'} by the Solution Architect Agent against the approved requirements, "
-                f"{len(decisions)} decision(s) and {len(reviews)} review comment(s)"
+                f"{len(decisions)} decision(s), {len(reviews)} review comment(s) and {len(review_findings)} review finding(s)"
             ),
-            review_responses=[
-                ReviewResponse(approval_id=reviews[r.ref][0], comment=reviews[r.ref][1], response=r.response) for r in output.review_responses
-            ],
+            review_responses=[response(r.ref, r.response) for r in output.review_responses],
         )
         result = services.design.record_draft(run.agent, run.project_id, draft)
         version = result.view

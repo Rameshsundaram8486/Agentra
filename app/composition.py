@@ -16,6 +16,8 @@ from app.modules.audit.service import AuditService
 from app.modules.decisions.authority import ApprovalMatrix, load_approval_matrix
 from app.modules.decisions.service import DecisionsService
 from app.modules.design.service import DESIGN_TYPE, DesignService
+from app.modules.design_reviews.checklist import SecurityChecklist, load_security_checklist
+from app.modules.design_reviews.service import DesignReviewsService
 from app.modules.executions.service import ExecutionsService
 from app.modules.identity.authz import PermissionPolicy, load_permission_policy
 from app.modules.identity.service import IdentityService
@@ -29,7 +31,7 @@ from app.modules.workflow.definitions import WorkflowCatalog, WorkflowDefinition
 from app.modules.workflow.service import WorkflowService
 
 CONFIG_DIR = ROOT_DIR / "config"
-EXIT_CHECKS = frozenset({"design_coverage"})  # named phase exit checks wired in Services.workflow
+EXIT_CHECKS = frozenset({"design_coverage", "design_reviews"})  # named phase exit checks wired in Services.workflow
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,7 @@ class Policies:
     models: ModelConfig
     incidents: IncidentRules
     reports: ReportCatalog
+    security_checklist: SecurityChecklist
     session_ttl: timedelta = timedelta(hours=12)
     min_password_length: int = 12
 
@@ -68,7 +71,7 @@ def _check_cross_references(catalog: WorkflowCatalog, approvals: ApprovalMatrix,
         workflow_task = next((t for t in catalog.phase(task.spec.phase).tasks if t.key == task.spec.workflow_task), None)
         if task.spec.workflow_task is not None and (workflow_task is None or workflow_task.agent != agent_key):
             raise AgentDefinitionError(f"{name} names workflow task '{task.spec.workflow_task}', which phase {task.spec.phase} does not assign to {agent_key}")
-        unknown = set(task.spec.context_artifact_types + task.spec.context_reviews_of) - set(approvals.artifact_types)
+        unknown = set(task.spec.context_artifact_types + task.spec.context_reviews_of + task.spec.context_findings_of) - set(approvals.artifact_types)
         if unknown:
             raise AgentDefinitionError(f"{name} reads unknown context artifact types {sorted(unknown)}")
         unknown = set(task_refs(agent_key, task.spec.context_decisions_from)) - set(agents.tasks)
@@ -93,6 +96,7 @@ def load_policies(session_ttl: timedelta = timedelta(hours=12), min_password_len
         models=load_model_config(CONFIG_DIR / "models.yaml"),
         incidents=load_incident_rules(CONFIG_DIR / "policies" / "incident_rules.yaml"),
         reports=load_report_catalog(CONFIG_DIR / "policies" / "report_visibility.yaml"),
+        security_checklist=load_security_checklist(CONFIG_DIR / "policies" / "security_checklist.yaml"),
         session_ttl=session_ttl,
         min_password_length=min_password_length,
     )
@@ -144,8 +148,11 @@ class Services:
             self.identity,
             self.artifacts,
             self.policies.approvals,
-            # Resolved lazily: the design service is built on top of this one.
-            approval_checks={DESIGN_TYPE: lambda version_id: self.design.approval_problems(version_id)},
+            # Resolved lazily: the design and design review services are built on top of this one.
+            approval_checks={
+                DESIGN_TYPE: lambda version_id: self.design.approval_problems(version_id) + self.design_reviews.design_problems(version_id),
+                "security_review": lambda version_id: self.design_reviews.security_approval_problems(version_id),
+            },
         )
 
     @cached_property
@@ -159,7 +166,10 @@ class Services:
             self.decisions,
             # Resolved lazily: the executions and design services are built on top of this one.
             open_questions=lambda task_id: self.executions.open_questions(task_id),
-            exit_checks={"design_coverage": lambda project_id: self.design.coverage_failures(project_id)},
+            exit_checks={
+                "design_coverage": lambda project_id: self.design.coverage_failures(project_id),
+                "design_reviews": lambda project_id: self.design_reviews.gate_failures(project_id),
+            },
         )
 
     @cached_property
@@ -220,4 +230,19 @@ class Services:
     def design(self) -> DesignService:
         return DesignService(
             self.session, self.clock, self.audit, self.identity, self.artifacts, self.decisions, self.projects, self.requirements
+        )
+
+    @cached_property
+    def design_reviews(self) -> DesignReviewsService:
+        return DesignReviewsService(
+            self.session,
+            self.clock,
+            self.audit,
+            self.identity,
+            self.artifacts,
+            self.decisions,
+            self.projects,
+            self.requirements,
+            self.design,
+            self.policies.security_checklist,
         )
