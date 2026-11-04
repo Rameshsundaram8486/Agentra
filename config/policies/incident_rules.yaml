@@ -1,0 +1,32 @@
+# Which failed or blocked agent runs open an incident, and how severe it is.
+# Keys are the run's error code (see app/harness/runner.py and app/model_gateway). A code not listed uses
+# `default`. open: false means the run's own record is enough: these are normal "waiting" states.
+# A repeat failure with the same code on the same task, while an incident is still open or resolved but not
+# closed, is recorded on that incident as a recurrence instead of opening another.
+#
+# closing.independent_verification: the person who resolved an incident may not close it.
+version: 1
+
+default: {open: true, severity: medium}
+
+codes:
+  internal_error: {open: true, severity: high}
+  refused: {open: true, severity: high}
+  provider_unreachable: {open: true, severity: high}
+  provider_unavailable: {open: true, severity: high}
+  rate_limited: {open: true, severity: high}
+  provider_auth: {open: true, severity: high}
+  provider_not_configured: {open: true, severity: high}
+  bad_request: {open: true, severity: high}
+  provider_error: {open: true, severity: high}
+  budget_exceeded: {open: true, severity: high}
+  guardrail_blocked: {open: true, severity: medium}
+  truncated: {open: true, severity: medium}
+  apply_failed: {open: true, severity: medium}
+  unknown_task: {open: true, severity: medium}
+  input_rejected: {open: true, severity: low}
+  missing_input: {open: false, severity: low}
+  precondition: {open: false, severity: low}
+
+closing:
+  independent_verification: true

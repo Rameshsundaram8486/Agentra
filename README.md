@@ -2,7 +2,7 @@
 
 AI-native operating platform for an IT services company. Specialised agents do bounded work, a workflow engine owns state, and humans approve consequential decisions against exact artifact versions.
 
-> **Status: Increment 3b done: review loop, change-controlled baseline, change requests and traceability.** Working so far:
+> **Status: Increment 3 (Phase 7) done: requirements, change control, traceability, reports and incidents.** Working so far:
 > - sign-in with server sessions
 > - projects and role-based memberships
 > - a workflow engine driven by YAML lifecycles, with entry and exit gates, optimistic locking and a record of every transition
@@ -23,6 +23,8 @@ AI-native operating platform for an IT services company. Specialised agents do b
 > - a review loop: a reviewer's comments drive the redraft, which must answer each one
 > - an approved baseline under change control: changes only through a change request approved by an owner and a customer approver (different people, not the raiser), applied by the agent and limited in code to the items it lists
 > - a requirements traceability matrix (objectives, requirements, user stories, acceptance criteria, sources) with gap checks and CSV export
+> - requirements reports (executive summary; detailed BRD and traceability) built only from records, versioned, with provenance; customers see the summary only
+> - incident records opened automatically from failed agent runs, resolved with a root-cause analysis and closed by a different person
 >
 > Everything else is still scaffold: those files carry a one-line purpose header and say "Scaffold only". See [docs/architecture/overview.md](docs/architecture/overview.md).
 

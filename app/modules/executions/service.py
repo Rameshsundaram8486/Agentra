@@ -40,6 +40,7 @@ from app.modules.executions.schemas import (
     StartedRun,
 )
 from app.modules.identity.service import SYSTEM_ACTOR, Actor, IdentityService
+from app.modules.oversight.service import OversightService
 from app.modules.workflow.service import TaskView, TransitionRequest, WorkflowService
 
 __all__ = ["AGENT_RUN_JOB", "AgentRunCreate", "AgentRunDetail", "AgentRunView", "ExecutionsService", "StartedRun"]
@@ -75,6 +76,7 @@ class ExecutionsService:
         artifacts: ArtifactsService,
         workflow: WorkflowService,
         decisions: DecisionsService,
+        oversight: OversightService,
         registry: AgentRegistry,
     ) -> None:
         self._session = session
@@ -84,6 +86,7 @@ class ExecutionsService:
         self._artifacts = artifacts
         self._workflow = workflow
         self._decisions = decisions
+        self._oversight = oversight
         self._registry = registry
 
     # Requests and reads ---------------------------------------------------------------------
@@ -279,6 +282,8 @@ class ExecutionsService:
                 "cost_usd": str(run.cost_usd),
             },
         )
+        if status in ("failed", "blocked"):
+            self._record_incident(run)
         target = task_state or {"failed": "failed", "blocked": "blocked"}.get(status)
         if run.task_id is not None and target is not None:
             agent = self._identity.get_actor(run.agent_user_id)
@@ -385,6 +390,51 @@ class ExecutionsService:
         return linked
 
     # Helpers --------------------------------------------------------------------------------
+
+    def _record_incident(self, run: AgentRun) -> None:
+        """The evidence as it stands when the run ends; the incident is opened (or recurs) in this transaction."""
+        task = self._registry.task(run.agent_key, run.task_key)
+        task_state = self._workflow.task_view(run.task_id).state if run.task_id else None
+        calls = repository.calls_for_runs(self._session, [run.id])
+        record = self._artifacts.version_record(run.input_artifact_version_id)
+        evidence = {
+            "run_id": str(run.id),
+            "agent": run.agent_key,
+            "task": run.task_key,
+            "status": run.status,
+            "error_code": run.error_code,
+            "error_message": run.error_message,
+            "attempts": run.attempts,
+            "max_attempts": run.max_attempts,
+            "prompt_version": run.prompt_version,
+            "input": f"{record.artifact_title} v{record.version_no} (sha256 {record.content_sha256[:12]})",
+            "workflow_task_state": task_state,
+            "blocking_findings": [f for f in run.findings if f.get("severity") == "block"],
+            "model_calls": [
+                {
+                    "status": c.status,
+                    "model": c.model,
+                    "stop_reason": c.stop_reason,
+                    "refusal_category": c.refusal_category,
+                    "cost_usd": str(c.cost_usd if c.cost_usd is not None else c.reserved_usd),
+                    "request_id": c.request_id,
+                    "error": c.error,
+                }
+                for c in calls
+            ],
+            "recorded_at": self._clock.now().isoformat(),
+        }
+        name = task.spec.title if task else run.task_key
+        self._oversight.record_run_failure(
+            project_id=run.project_id,
+            run_id=run.id,
+            task_id=run.task_id,
+            agent_key=run.agent_key,
+            task_key=run.task_key,
+            error_code=run.error_code,
+            title=f"{name}: {run.error_code or run.status}",
+            evidence=evidence,
+        )
 
     def _context_snapshot(self, actor: Actor, project_id: uuid.UUID, task: TaskDefinition) -> dict[str, Any]:
         documents = [

@@ -27,7 +27,9 @@ Browser (web/control-center, plain HTML/JS)
 | `workflow` | phase runs, tasks, state transitions; lifecycles from `config/workflows/` | audit, identity, decisions (approval gate) |
 | `projects` | projects | audit, identity, workflow |
 | `executions` | agent runs (linked to workflow tasks, with their inputs), model calls (the spend ledger) | audit, identity, artifacts, workflow, decisions |
-| `requirements` | requirement items, versions and the item ID registry; quality checks; BRD rendering | audit, identity, artifacts, decisions, projects |
+| `requirements` | requirement items, versions and the item ID registry; quality checks; BRD rendering; change requests; traceability | audit, identity, artifacts, decisions, projects |
+| `oversight` | incidents and their events (recurrences, root-cause analyses, closure); rules from `config/policies/incident_rules.yaml` | audit, identity |
+| `reporting` | report versions; data built from other modules' records, rendered with Jinja2 templates; visibility from `config/policies/report_visibility.yaml` | all of the above, read-only |
 
 ## Approvals and decisions
 
@@ -81,6 +83,13 @@ Worker (app/workers/workflow_worker.py) claims the job
 - **Review comments are inputs.** A redraft reads every comment requesting changes on the current version and must answer each one; the answers are stored with the version and shown in the document.
 - **The Clarify task cannot be closed while a question it raised is still open** (answer or defer it).
 - Uploaded files are parsed on the host with size, page and decompression limits; the extracted text is what agents read and quote, and the original file is kept by its hash.
+
+## Reports and incidents
+
+- **Reports are built from records only.** The reporting service reads every module through its service, with the permissions of the person generating the report, and builds the data in `app/modules/reporting/generators.py`: no clock reads, no model calls, stable ordering. Missing information is labelled ("No due date set", "Not applicable until Phase 10").
+- **Same records, same report.** The data is hashed together with the template version; if neither changed since the latest version, that version is returned rather than a copy. Each version stores its data, its sources and the rendered HTML (in the content store, re-hashed on read). Report versions are append-only.
+- **Rendering** uses Jinja2 with autoescaping and strict undefined variables. The report document has no scripts and its own Content-Security-Policy; the Control Center shows it in a sandboxed frame.
+- **Incidents** open in the same transaction that records a failed or blocked agent run, when `incident_rules.yaml` says so, with the evidence at that moment. A repeat failure of the same kind on the same agent task is added to the incident that is not yet closed (and reopens it if it was resolved). People resolve it with a root-cause analysis (cause labelled confirmed, probable or unknown; corrective action with an owner and target date; verification criteria) and someone else closes it with verification evidence.
 
 ## Authorisation
 

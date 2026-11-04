@@ -1,1 +1,73 @@
-{# Executive summary report template (status, decisions, risks, next actions). Scaffold only: not implemented yet. #}
+{# Requirements executive summary: status, progress against baseline, decisions, risks, milestones, next actions. #}
+{% extends "_base.html.j2" %}
+{% block content %}
+{% set b = data.baseline %}
+<section>
+  <h2>Status</h2>
+  <p>Phase {{ data.phase.number }}, {{ data.phase.name }}: <strong>{{ data.phase.state }}</strong>.</p>
+  <table>
+    <thead><tr><th>Task</th><th>Who</th><th>State</th></tr></thead>
+    <tbody>
+    {% for task in data.phase.tasks %}<tr><td>{{ task.title }}</td><td>{{ task.agent }}</td><td>{{ task.state }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Progress against the baseline</h2>
+  {% if b %}
+  <p>{{ b.title }} v{{ b.version_no }}: <strong>{{ b.approval_status | replace("_", " ") }}</strong>{% if b.approved %}, approved by {{ b.approved.by }} on {{ b.approved.at }} (content sha256 {{ b.approved.sha256[:12] }}){% endif %}.
+    {% if b.locked %}It is the approved baseline, under change control.{% endif %}
+    {% if b.change_request %}This version applies {{ b.change_request }}.{% endif %}</p>
+  <ul>
+    <li>{{ b.item_count }} items: {{ b.counts.confirmed }} confirmed, {{ b.counts.proposed }} proposed, {{ b.counts.open }} open.</li>
+    <li>Traceability: {{ b.traced.with_objective }} of {{ b.traced.rows }} requirements trace to an objective.</li>
+  </ul>
+  {% else %}
+  <p class="missing">No requirements have been drafted yet.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Decisions required</h2>
+  {% if data.decisions_waiting %}
+  <ul>{% for d in data.decisions_waiting %}<li>{{ d.title }} <span class="muted">(raised by {{ d.raised_by or "unknown" }}, {{ d.raised_at }})</span></li>{% endfor %}</ul>
+  {% else %}<p>None waiting.</p>{% endif %}
+  {% if data.decisions_deferred %}<p class="muted">Deferred: {% for d in data.decisions_deferred %}{{ d.title }}{% if not loop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Risks, blockers and dependencies</h2>
+  {% set r = data.risks %}
+  <ul>
+    <li>Open questions: {% if r.open_questions %}{% for q in r.open_questions %}{{ q.id }} {{ q.title }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}none{% endif %}.</li>
+    <li>Dependencies: {% if r.dependencies %}{% for q in r.dependencies %}{{ q.id }} {{ q.title }}{% if not loop.last %}; {% endif %}{% endfor %}{% else %}none recorded{% endif %}.</li>
+    <li>Assumptions not yet confirmed: {{ r.assumptions }}.</li>
+    <li>Blocked or failed tasks: {% if r.blocked_tasks %}{% for t in r.blocked_tasks %}{{ t.title }} ({{ t.state }}){% if not loop.last %}; {% endif %}{% endfor %}{% else %}none{% endif %}.</li>
+    <li>Open incidents: {% if r.incidents %}{% for i in r.incidents %}{{ i.id }} {{ i.title }} ({{ i.severity }}, {{ i.status }}){% if not loop.last %}; {% endif %}{% endfor %}{% else %}none{% endif %}.</li>
+    <li>Traceability gaps: {{ r.rows_with_gaps }} requirement(s) with gaps{% if r.trace_gaps %}; {% for g in r.trace_gaps %}{{ g }}{% if not loop.last %}; {% endif %}{% endfor %}{% endif %}.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Recent milestones</h2>
+  {% if data.milestones %}
+  <ul>{% for m in data.milestones %}<li><span class="muted">{{ m.at }}</span> {{ m.what }}</li>{% endfor %}</ul>
+  {% else %}<p class="missing">No milestones recorded yet.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Next actions</h2>
+  {% if data.next_actions %}
+  <table>
+    <thead><tr><th>Action</th><th>Owner</th><th>Due</th></tr></thead>
+    <tbody>{% for a in data.next_actions %}<tr><td>{{ a.action }}</td><td>{{ a.owner }}</td><td{% if a.due == "No due date set" %} class="missing"{% endif %}>{{ a.due }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p>No open actions.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Limitations</h2>
+  <ul>{% for l in data.limitations %}<li>{{ l }}</li>{% endfor %}</ul>
+</section>
+{% endblock %}

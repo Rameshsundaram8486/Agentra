@@ -18,7 +18,11 @@ from app.modules.decisions.service import DecisionsService
 from app.modules.executions.service import ExecutionsService
 from app.modules.identity.authz import PermissionPolicy, load_permission_policy
 from app.modules.identity.service import IdentityService
+from app.modules.oversight.rules import IncidentRules, load_incident_rules
+from app.modules.oversight.service import OversightService
 from app.modules.projects.service import ProjectsService
+from app.modules.reporting.catalog import ReportCatalog, load_report_catalog
+from app.modules.reporting.service import ReportingService
 from app.modules.requirements.service import RequirementsService
 from app.modules.workflow.definitions import WorkflowCatalog, WorkflowDefinitionError, load_catalog
 from app.modules.workflow.service import WorkflowService
@@ -35,6 +39,8 @@ class Policies:
     approvals: ApprovalMatrix
     agents: AgentRegistry
     models: ModelConfig
+    incidents: IncidentRules
+    reports: ReportCatalog
     session_ttl: timedelta = timedelta(hours=12)
     min_password_length: int = 12
 
@@ -80,6 +86,8 @@ def load_policies(session_ttl: timedelta = timedelta(hours=12), min_password_len
         approvals=approvals,
         agents=agents,
         models=load_model_config(CONFIG_DIR / "models.yaml"),
+        incidents=load_incident_rules(CONFIG_DIR / "policies" / "incident_rules.yaml"),
+        reports=load_report_catalog(CONFIG_DIR / "policies" / "report_visibility.yaml"),
         session_ttl=session_ttl,
         min_password_length=min_password_length,
     )
@@ -155,7 +163,30 @@ class Services:
             self.artifacts,
             self.workflow,
             self.decisions,
+            self.oversight,
             self.policies.agents,
+        )
+
+    @cached_property
+    def oversight(self) -> OversightService:
+        return OversightService(self.session, self.clock, self.audit, self.identity, self.policies.incidents)
+
+    @cached_property
+    def reporting(self) -> ReportingService:
+        return ReportingService(
+            self.session,
+            self.clock,
+            self.audit,
+            self.identity,
+            self.store,
+            self.policies.reports,
+            projects=self.projects,
+            workflow=self.workflow,
+            artifacts=self.artifacts,
+            decisions=self.decisions,
+            requirements=self.requirements,
+            executions=self.executions,
+            oversight=self.oversight,
         )
 
     @cached_property

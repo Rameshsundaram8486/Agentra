@@ -1,1 +1,141 @@
-{# Detailed phase report template (inputs, activity, versions, evidence, approvals). Scaffold only: not implemented yet. #}
+{# Detailed BRD and traceability report: the summary, then inputs, activity, versions, reviews, requirements,
+   traceability, approvals, change requests, incidents and exceptions. #}
+{% extends "executive_summary.html.j2" %}
+{% block content %}
+{{ super() }}
+
+<section>
+  <h2>Scope and inputs</h2>
+  {% if data.summary_text %}<p>{{ data.summary_text }}</p>{% endif %}
+  {% for doc in data.inputs %}
+  <h3>{{ doc.title }} <span class="muted">({{ doc.type }})</span></h3>
+  <ul>{% for v in doc.versions %}
+    <li>v{{ v.version_no }}, {{ v.at }}, by {{ v.author }}: {{ v.change_summary }} <span class="hash">sha256 {{ v.sha256[:12] }}</span>
+      {% if v.sources %}<br><span class="muted">{% for s in v.sources %}{{ s }}{% if not loop.last %}; {% endif %}{% endfor %}</span>{% endif %}</li>
+  {% endfor %}</ul>
+  {% else %}<p class="missing">No input documents.</p>{% endfor %}
+</section>
+
+<section>
+  <h2>Workflow history</h2>
+  <h3>Phase {{ data.phase.number }}</h3>
+  <ul>{% for h in data.phase_history %}<li><span class="muted">{{ h.at }}</span> {{ h.from }} to {{ h.to }} by {{ h.by }}: {{ h.reason }}</li>{% else %}<li class="missing">No changes recorded.</li>{% endfor %}</ul>
+  {% for task in data.tasks %}
+  <h3>Task: {{ task.title }} ({{ task.state }})</h3>
+  <ul>{% for h in task.history %}<li><span class="muted">{{ h.at }}</span> {{ h.from }} to {{ h.to }} by {{ h.by }}: {{ h.reason }}</li>{% else %}<li class="missing">No changes recorded.</li>{% endfor %}</ul>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Agent activity</h2>
+  {% if data.agent_runs %}
+  <table>
+    <thead><tr><th>When</th><th>Task</th><th>Input</th><th>Status</th><th>Model</th><th>Cost (USD)</th><th>Prompt version</th></tr></thead>
+    <tbody>{% for r in data.agent_runs %}
+      <tr><td>{{ r.at }}</td><td>{{ r.task }}<br><span class="muted">asked by {{ r.requested_by or "unknown" }}</span></td><td>{{ r.input }}</td>
+        <td>{{ r.status }}{% if r.error %}<br><span class="muted">{{ r.error }}</span>{% endif %}{% if r.findings %}<br><span class="muted">{{ r.findings }} guardrail finding(s)</span>{% endif %}</td>
+        <td>{{ r.model }}</td><td class="num">{{ r.cost_usd }}</td><td class="hash">{{ r.prompt_version }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  <p class="muted">Total model cost: USD {{ data.total_cost_usd }}.</p>
+  {% else %}<p class="missing">No agent runs.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Requirements document versions and reviews</h2>
+  {% for v in data.baseline_versions %}
+  <h3>Version {{ v.version_no }} <span class="hash">sha256 {{ v.sha256[:12] }}</span></h3>
+  <p>{{ v.at }}, by {{ v.author }}: {{ v.change_summary }}</p>
+  <ul>{% for r in v.reviews %}<li>{{ r.decision }} by {{ r.by }}, {{ r.at }}{% if r.comment %}: "{{ r.comment }}"{% endif %}</li>{% else %}<li class="missing">Not reviewed.</li>{% endfor %}</ul>
+  {% else %}<p class="missing">No requirements document yet.</p>{% endfor %}
+  {% if data.review_responses %}
+  <h3>Responses to review comments in the current version</h3>
+  <ul>{% for r in data.review_responses %}<li>"{{ r.comment }}": {{ r.response }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Requirements</h2>
+  {% for i in data.requirement_items %}
+  <div class="item">
+    <h3>{{ i.id }} {{ i.title }} <span class="tag">{{ i.status }}</span></h3>
+    <p>{{ i.statement }}</p>
+    <p class="muted">{{ i.kind }}; labelled {{ i.label }}; priority {{ i.priority }}{% if i.related %}; traces to {{ i.related | join(", ") }}{% endif %}.</p>
+    {% if i.criteria %}<ul>{% for c in i.criteria %}<li>{{ c }}</li>{% endfor %}</ul>{% endif %}
+    <p class="muted">Sources: {% for s in i.sources %}{{ s }}{% if not loop.last %}; {% endif %}{% endfor %}</p>
+    {% for f in i.flags %}<p class="flag">Quality check: {{ f }}</p>{% endfor %}
+  </div>
+  {% else %}<p class="missing">No requirements drafted.</p>{% endfor %}
+</section>
+
+<section>
+  <h2>Traceability matrix</h2>
+  {% if data.traceability %}
+  <table>
+    <thead><tr><th>Requirement</th><th>Objectives</th><th>User stories</th><th>Acceptance criteria</th><th>Design</th><th>Tests</th><th>Gaps</th></tr></thead>
+    <tbody>{% for r in data.traceability %}
+      <tr><td>{{ r.id }} {{ r.title }}</td><td>{{ r.objectives | join(", ") or "-" }}</td><td>{{ r.stories | join(", ") or "-" }}</td>
+        <td>{% for c in r.criteria %}{{ c }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+        <td class="missing">{{ r.design }}</td><td class="missing">{{ r.tests }}</td><td>{{ r.gaps | join("; ") or "-" }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% else %}<p class="missing">No traceability yet.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Approvals</h2>
+  {% if data.approvals %}
+  <table>
+    <thead><tr><th>When</th><th>Document</th><th>Version</th><th>Decision</th><th>By</th><th>Content sha256</th></tr></thead>
+    <tbody>{% for a in data.approvals %}
+      <tr><td>{{ a.at }}</td><td>{{ a.artifact }} <span class="muted">({{ a.type }})</span></td><td>v{{ a.version_no }}</td>
+        <td>{{ a.decision }}{% if a.comment %}<br><span class="muted">{{ a.comment }}</span>{% endif %}</td><td>{{ a.by }}</td><td class="hash">{{ a.sha256 }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% else %}<p class="missing">No approvals recorded.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Decisions</h2>
+  <ul>{% for d in data.decisions %}<li>{{ d.title }}: {{ d.status }}{% if d.final_choice %}, chose "{{ d.final_choice }}"{% endif %} <span class="muted">(raised by {{ d.raised_by or "unknown" }})</span></li>{% else %}<li class="missing">No decisions.</li>{% endfor %}</ul>
+</section>
+
+<section>
+  <h2>Change requests</h2>
+  {% for r in data.change_requests %}
+  <h3>{{ r.id }}: {{ r.title }} <span class="tag">{{ r.status }}</span></h3>
+  <p>{{ r.change }}</p>
+  <p class="muted">Reason: {{ r.reason }}. Impact: {{ r.impact }}. Against v{{ r.baseline_version_no }}; affects {{ r.affected | join(", ") or "no existing items" }}{% if r.allows_new_items %}; may add items{% endif %}. Raised by {{ r.raised_by or "unknown" }}.{% if r.applied_version_no %} Applied in v{{ r.applied_version_no }}.{% endif %}</p>
+  <ul>{% for e in r.events %}<li>{{ e.at }}: {{ e.event }}{% if e.role %} as {{ e.role }}{% endif %}{% if e.by %} by {{ e.by }}{% endif %}{% if e.comment %}: "{{ e.comment }}"{% endif %}</li>{% endfor %}</ul>
+  {% else %}<p>None.</p>{% endfor %}
+</section>
+
+<section>
+  <h2>Defects, incidents and root-cause analyses</h2>
+  <p class="missing">Defects: {{ data.defects }}</p>
+  {% for i in data.incidents %}
+  <h3>{{ i.id }}: {{ i.title }} <span class="tag">{{ i.status }}</span></h3>
+  <p class="muted">{{ i.category }}, severity {{ i.severity }}, opened {{ i.opened_at }}, occurred {{ i.occurrences }} time(s).</p>
+  <p>Observed facts: {{ i.facts.error_message or i.facts.error_code }} (attempts: {{ i.facts.attempts }}; input: {{ i.facts.input }}; task state: {{ i.facts.workflow_task_state or "none" }}).</p>
+  {% if i.rca %}
+  <ul>
+    <li>Cause ({{ i.rca.certainty }}): {{ i.rca.cause }}</li>
+    {% if i.rca.contributing_factors %}<li>Contributing factors: {{ i.rca.contributing_factors }}</li>{% endif %}
+    <li>Containment: {{ i.rca.containment }}</li>
+    <li>Corrective action: {{ i.rca.corrective_action }} (owner {{ i.rca.owner or "unknown" }}, target {{ i.rca.target_date }})</li>
+    <li>Verification criteria: {{ i.rca.verification_criteria }}</li>
+    <li>Resolved by {{ i.rca.resolved_by or "unknown" }}{% if i.closed_by %}; verified and closed by {{ i.closed_by }}: {{ i.verification_evidence }}{% endif %}</li>
+  </ul>
+  {% else %}<p class="missing">No root-cause analysis yet.</p>{% endif %}
+  {% else %}<p>No incidents.</p>{% endfor %}
+</section>
+
+<section>
+  <h2>Exceptions and unresolved questions</h2>
+  <ul>
+    <li>Items with quality flags: {{ data.exceptions.flagged_items }}.</li>
+    <li>Open questions: {{ data.exceptions.open_questions | join(", ") or "none" }}.</li>
+    {% for f in data.exceptions.set_flags %}<li>{{ f }}</li>{% endfor %}
+  </ul>
+</section>
+{% endblock %}

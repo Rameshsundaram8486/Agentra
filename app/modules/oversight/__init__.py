@@ -1,4 +1,2 @@
-"""Project Owner records: incidents, RCA, corrective actions, escalations, health snapshots.
-
-Scaffold only: not implemented yet.
-"""
+"""Incident records with root-cause analyses. Corrective-action tasks, escalations, health snapshots and
+the detectors arrive with the Project Owner agent (Increment 9)."""

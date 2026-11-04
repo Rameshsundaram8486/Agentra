@@ -1,2 +1,15 @@
-# Which report sections customers may see.
-# Scaffold only: not implemented yet.
+# Report types, and which ones customer approvers may see. Owners, project managers and reviewers see all
+# types of their projects (report.view in permissions.yaml); customer approvers see only the types marked
+# customer_visible (report.view_customer). The detailed report shows agent internals, costs and prompt
+# versions, so it stays internal.
+version: 1
+
+report_types:
+  requirements_summary:
+    title: Requirements executive summary
+    phase: 7
+    customer_visible: true
+  requirements_detailed:
+    title: Detailed BRD and traceability report
+    phase: 7
+    customer_visible: false

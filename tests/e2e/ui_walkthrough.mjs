@@ -292,6 +292,45 @@ async function main() {
     await shot("10-change-request-approved");
   });
 
+  await step("owner generates the executive summary and views it in a sandboxed frame", async () => {
+    const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
+    await goto(crUrl, "document.querySelector('#report-actions button[data-report=requirements_summary]') !== null", "report buttons");
+    await click("#report-actions button[data-report=requirements_summary]");
+    await waitFor("location.pathname.endsWith('/report.html') && document.getElementById('report-frame').src.includes('/html')", "report page");
+    const reportUrl = await evaluate("document.getElementById('report-frame').src");
+    const body = await evaluate(`fetch(${js(reportUrl)}).then((r) => r.text())`);
+    for (const expected of ["Requirements executive summary", "Next actions", "No due date set", "INC-001"]) if (!body.includes(expected)) throw new Error(`report missing ${expected}`);
+    await waitFor("document.getElementById('provenance').innerText.includes('Template version')", "provenance shown");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await shot("11-report");
+  });
+
+  await step("an incident is resolved with a root-cause analysis and closed by someone else", async () => {
+    const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
+    await goto(crUrl, "document.querySelector('#incidents li[data-incident=INC-001] a') !== null", "incident listed");
+    await click("#incidents li[data-incident=INC-001] a");
+    await waitFor("location.pathname.endsWith('/incident.html') && !document.getElementById('resolve').hidden", "resolve form");
+    await fill("#rca-cause", "The model returned text that was not JSON");
+    await fill("#rca-certainty", "probable");
+    await fill("#rca-containment", "Nothing was saved; the run failed safely");
+    await fill("#rca-action", "Ask the agent again");
+    await fill("#rca-owner", seed.users.pm);
+    await fill("#rca-date", "2026-12-01");
+    await fill("#rca-verify", "The next draft succeeds");
+    await click("#resolve-form button[type=submit]");
+    await waitFor("document.querySelector('#status .badge').innerText.toLowerCase() === 'resolved' && !document.getElementById('close').hidden", "resolved");
+    await fill("#close-evidence", "Version 1 was drafted successfully afterwards");
+    await click("#close-form button[type=submit]");
+    await waitFor("document.getElementById('close-error').innerText.includes('another person must verify')", "resolver cannot close");
+    const incidentUrl = await evaluate("location.pathname + location.search");
+    await login("reviewer");
+    await goto(incidentUrl, "!document.getElementById('close').hidden", "close form for the reviewer");
+    await fill("#close-evidence", "Version 1 was drafted successfully afterwards");
+    await click("#close-form button[type=submit]");
+    await waitFor("document.querySelector('#status .badge').innerText.toLowerCase() === 'closed'", "closed");
+    await shot("12-incident-closed");
+  });
+
   await step("project page lists the approved document and the audit page loads", async () => {
     await goto(projectUrl, "document.getElementById('documents').innerText.includes('Leave app BRD')", "documents table");
     const docs = await text("#documents");

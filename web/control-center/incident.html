@@ -1,1 +1,104 @@
-<!-- Control Center - Incident detail: RCA, corrective actions, verification. Scaffold only: not implemented yet. -->
+<!doctype html>
+<!-- Control Center - Incident detail: observed facts, recurrences, root-cause analysis, corrective action, verification. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Incident - Agentra</title>
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <script type="module" src="../assets/js/pages/control-center/incident.js"></script>
+</head>
+<body>
+  <header class="shell" id="shell"></header>
+  <main class="page">
+    <div class="page-header">
+      <div>
+        <h1 id="incident-title">Incident</h1>
+        <p class="subtitle"><a id="back-link" href="projects.html">Project</a> - <span id="incident-meta"></span></p>
+      </div>
+      <div id="status"></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="section">
+        <section class="section">
+          <h2>Observed facts</h2>
+          <p class="muted small">Captured by Agentra when the incident opened. Not editable.</p>
+          <div class="card"><dl class="kv" id="facts"></dl></div>
+        </section>
+        <section class="section">
+          <h2>History</h2>
+          <div class="card"><ul class="list" id="events"></ul></div>
+        </section>
+      </div>
+
+      <div class="section">
+        <section class="section">
+          <h2>Root-cause analysis</h2>
+          <div class="card" id="rca"></div>
+          <div class="card" id="resolve" hidden>
+            <form id="resolve-form" class="form">
+              <h3>Resolve</h3>
+              <div class="field">
+                <label for="rca-cause">Cause</label>
+                <textarea id="rca-cause" name="cause" rows="3" required minlength="3"></textarea>
+              </div>
+              <div class="field">
+                <label for="rca-certainty">How certain</label>
+                <select id="rca-certainty" name="cause_certainty">
+                  <option value="confirmed">Confirmed by evidence</option>
+                  <option value="probable" selected>Probable</option>
+                  <option value="unknown">Unknown (say what evidence is needed)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="rca-factors">Contributing factors</label>
+                <textarea id="rca-factors" name="contributing_factors" rows="2"></textarea>
+              </div>
+              <div class="field">
+                <label for="rca-containment">Containment</label>
+                <textarea id="rca-containment" name="containment" rows="2" required minlength="3"></textarea>
+              </div>
+              <div class="field">
+                <label for="rca-action">Corrective action</label>
+                <textarea id="rca-action" name="corrective_action" rows="2" required minlength="3"></textarea>
+              </div>
+              <div class="form-row">
+                <div class="field">
+                  <label for="rca-owner">Action owner (email of a person on the project)</label>
+                  <input id="rca-owner" name="action_owner_email" type="email" required>
+                </div>
+                <div class="field">
+                  <label for="rca-date">Target date</label>
+                  <input id="rca-date" name="target_date" type="date" required>
+                </div>
+              </div>
+              <div class="field">
+                <label for="rca-verify">Verification criteria</label>
+                <textarea id="rca-verify" name="verification_criteria" rows="2" required minlength="3"></textarea>
+              </div>
+              <div id="resolve-error" class="alert alert-error" role="alert" hidden></div>
+              <button class="button" type="submit">Resolve</button>
+            </form>
+          </div>
+          <div class="card" id="close" hidden>
+            <form id="close-form" class="form">
+              <h3>Verify and close</h3>
+              <p class="muted small">Someone other than the person who resolved it confirms the corrective action worked.</p>
+              <div class="field">
+                <label for="close-evidence">Verification evidence</label>
+                <textarea id="close-evidence" name="verification_evidence" rows="3" required minlength="10"></textarea>
+              </div>
+              <div id="close-error" class="alert alert-error" role="alert" hidden></div>
+              <button class="button" type="submit">Close</button>
+            </form>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

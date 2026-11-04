@@ -1,1 +1,35 @@
-<!-- Control Center - Report viewer (executive / detailed). Scaffold only: not implemented yet. -->
+<!doctype html>
+<!-- Control Center - Report viewer: one report version, its provenance and the rendered document. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Report - Agentra</title>
+  <link rel="stylesheet" href="../assets/css/tokens.css">
+  <link rel="stylesheet" href="../assets/css/base.css">
+  <link rel="stylesheet" href="../assets/css/layout.css">
+  <link rel="stylesheet" href="../assets/css/components.css">
+  <script type="module" src="../assets/js/pages/control-center/report.js"></script>
+</head>
+<body>
+  <header class="shell" id="shell"></header>
+  <main class="page">
+    <div class="page-header">
+      <div>
+        <h1 id="report-title">Report</h1>
+        <p class="subtitle"><a id="back-link" href="projects.html">Project</a> - <span id="report-meta"></span></p>
+      </div>
+      <div class="actions">
+        <a id="printable" class="button button-secondary" target="_blank" rel="noopener">Open printable version</a>
+        <a id="data-link" class="button button-secondary" target="_blank" rel="noopener">Data (JSON)</a>
+      </div>
+    </div>
+    <div class="card">
+      <dl class="kv" id="provenance"></dl>
+    </div>
+    <section class="section">
+      <iframe id="report-frame" class="report-frame" title="Report" sandbox></iframe>
+    </section>
+  </main>
+</body>
+</html>

@@ -4,6 +4,10 @@
 # decision outcomes by config/policies/approval_matrix.yaml, not here.
 # agent.run starts an agent task (a paid model call); agent_run.view shows runs, their model, cost and findings.
 # change.raise raises a change request against an approved baseline; who decides one is in approval_matrix.yaml.
+# report.generate makes a new report version; report.view sees every report type, report.view_customer only the
+#   types config/policies/report_visibility.yaml marks customer_visible.
+# incident.manage resolves an incident with a root-cause analysis; incident.close closes it once verified, and
+#   not by the person who resolved it (config/policies/incident_rules.yaml).
 version: 1
 
 platform_admin:
@@ -14,11 +18,14 @@ platform_admin:
   - user.manage
   - artifact.view
   - decision.view
+  - agent_run.view
+  - report.view
+  - incident.view
 
 roles:
-  owner: [project.view, project.manage_members, audit.view, artifact.view, artifact.author, decision.view, decision.raise, agent.run, agent_run.view, change.raise]
-  project_manager: [project.view, audit.view, artifact.view, artifact.author, decision.view, decision.raise, agent.run, agent_run.view, change.raise]
-  reviewer: [project.view, audit.view, artifact.view, decision.view, agent_run.view]
+  owner: [project.view, project.manage_members, audit.view, artifact.view, artifact.author, decision.view, decision.raise, agent.run, agent_run.view, change.raise, report.generate, report.view, incident.view, incident.manage, incident.close]
+  project_manager: [project.view, audit.view, artifact.view, artifact.author, decision.view, decision.raise, agent.run, agent_run.view, change.raise, report.generate, report.view, incident.view, incident.manage]
+  reviewer: [project.view, audit.view, artifact.view, decision.view, agent_run.view, report.view, incident.view, incident.close]
   # Customer visibility is narrowed to customer-facing artifacts when the Customer Portal is built (Phase 11).
-  customer_approver: [project.view, artifact.view]
+  customer_approver: [project.view, artifact.view, report.view_customer]
   agent: [project.view, artifact.view, artifact.author, decision.view, decision.raise]

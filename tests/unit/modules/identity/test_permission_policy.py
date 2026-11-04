@@ -16,7 +16,8 @@ def _actor(admin: bool = False) -> Actor:
 
 def test_permissions_come_only_from_project_roles_for_ordinary_users() -> None:
     assert POLICY.permissions_for(_actor(), ["reviewer"]) == {
-        "project.view", "audit.view", "artifact.view", "decision.view", "agent_run.view"
+        "project.view", "audit.view", "artifact.view", "decision.view", "agent_run.view",
+        "report.view", "incident.view", "incident.close",
     }
     assert POLICY.permissions_for(_actor(), []) == frozenset()
 

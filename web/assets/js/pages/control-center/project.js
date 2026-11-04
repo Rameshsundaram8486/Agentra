@@ -255,6 +255,7 @@ async function loadRequirements() {
 // Traceability and change requests ------------------------------------------------------------
 
 let currentRequirements = null;
+let canViewIncidents = false;
 let canRaiseChange = false;
 let canRunAgent = false;
 
@@ -402,10 +403,85 @@ function enableChangeRequests() {
   });
 }
 
+// Incidents and reports -------------------------------------------------------------------------
+
+async function loadIncidents() {
+  const incidents = await api(`/api/projects/${encodeURIComponent(projectId)}/incidents`);
+  document.getElementById("incident-section").hidden = false;
+  document.getElementById("incidents").replaceChildren(
+    ...(incidents.length
+      ? incidents.map((incident) =>
+          h(
+            "li",
+            { "data-incident": incident.incident_id },
+            h(
+              "div",
+              {},
+              h("a", { class: "primary", href: `incident.html?id=${encodeURIComponent(incident.id)}` }, `${incident.incident_id}: ${incident.title}`),
+              h("div", { class: "muted small" }, `Severity ${incident.severity}; opened ${formatDateTime(incident.opened_at)}; occurred ${incident.occurrences} time(s)`),
+            ),
+            statusBadge(incident.status),
+          ),
+        )
+      : [h("li", { class: "muted" }, "No incidents.")]),
+  );
+}
+
+async function loadReports() {
+  const reports = await api(`/api/projects/${encodeURIComponent(projectId)}/reports`);
+  document.getElementById("reports").replaceChildren(
+    ...(reports.length
+      ? reports.map((report) =>
+          h(
+            "li",
+            {},
+            h(
+              "div",
+              {},
+              h("a", { class: "primary", href: `report.html?id=${encodeURIComponent(report.id)}` }, `${report.title} v${report.version_no}`),
+              h("div", { class: "muted small" }, `Generated ${formatDateTime(report.generated_at)} by ${report.generated_by_name ?? "unknown"}${report.customer_visible ? "; visible to customers" : ""}`),
+            ),
+          ),
+        )
+      : [h("li", { class: "muted" }, "No reports generated yet.")]),
+  );
+}
+
+async function enableReports(canGenerate) {
+  const types = await api(`/api/projects/${encodeURIComponent(projectId)}/report-types`);
+  document.getElementById("report-section").hidden = false;
+  if (!canGenerate) return;
+  const error = document.getElementById("report-error");
+  document.getElementById("report-actions").replaceChildren(
+    ...types.map((type) =>
+      h(
+        "button",
+        {
+          class: "button button-secondary button-small",
+          type: "button",
+          "data-report": type.key,
+          onclick: async () => {
+            error.hidden = true;
+            try {
+              const result = await api(`/api/projects/${encodeURIComponent(projectId)}/reports`, { method: "POST", body: { report_type: type.key } });
+              location.assign(`report.html?id=${encodeURIComponent(result.report.id)}`);
+            } catch (failure) {
+              error.textContent = failure.message;
+              error.hidden = false;
+            }
+          },
+        },
+        `Generate ${type.title.toLowerCase()}`,
+      ),
+    ),
+  );
+}
+
 async function refreshAfterRun() {
   await Promise.all([
     loadPhases(),
     loadDecisionSummary(),
+    canViewIncidents ? loadIncidents() : Promise.resolve(),
     loadRequirements().then(() => Promise.all([loadTraceability(), loadChangeRequests()])),
     loadDocuments().then((artifacts) => fillBriefs(artifacts)),
   ]);
@@ -625,6 +701,12 @@ startPage(async () => {
     can("decision.view") ? loadDecisionSummary() : Promise.resolve(),
   ]);
   canRaiseChange = can("change.raise");
+  canViewIncidents = can("incident.view");
+  if (canViewIncidents) await loadIncidents();
+  if (can("report.view") || can("report.view_customer")) {
+    await enableReports(can("report.generate"));
+    await loadReports();
+  }
   canRunAgent = can("agent.run");
   if (can("artifact.view")) {
     await loadRequirements();

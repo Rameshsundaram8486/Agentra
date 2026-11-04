@@ -52,7 +52,7 @@ docx_path.write_bytes(make_docx("Discovery notes", "Leave approvals happen weekl
 
 
 def change_control_project() -> str:
-    """Brief clarified, requirements drafted and approved, CR-001 raised by the PM and still open."""
+    """Brief clarified; a failed draft (INC-001) then a good one, approved; CR-001 raised by the PM and still open."""
     settings = get_settings()
     policies = load_policies(min_password_length=settings.min_password_length)
     engine = create_db_engine(settings.database_url.get_secret_value())
@@ -101,6 +101,9 @@ def change_control_project() -> str:
         run(lambda s, d=decision: s.decisions.record_outcome(admin, d.id, DecisionOutcomeCreate(action="defer", comment="Later")))
     move(pm, "task", "clarify_brief", "completed")
 
+    model.add(fake_response("not JSON"))  # a failed draft first, so the project has an incident (INC-001)
+    ask_agent("draft_requirements")
+    move(admin, "task", "draft_requirements", "ready")
     items = [item for item in draft_items() if item["kind"] != "open_question"]
     model.add(fake_response(draft_json(items)))
     ask_agent("draft_requirements")

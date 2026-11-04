@@ -23,6 +23,9 @@ const TONE = {
   decided: "success",
   // change requests
   applied: "success",
+  // incidents
+  resolved: "warning",
+  closed: "success",
   // requirement items
   confirmed: "success",
   proposed: "warning",
