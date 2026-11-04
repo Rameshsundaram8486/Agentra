@@ -13,7 +13,12 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
-TEMPLATE_FILES = {"requirements_summary": "executive_summary.html.j2", "requirements_detailed": "detailed_report.html.j2"}
+TEMPLATE_FILES = {
+    "requirements_summary": "executive_summary.html.j2",
+    "requirements_detailed": "detailed_report.html.j2",
+    "design_summary": "design_summary.html.j2",
+    "design_detailed": "design_pack.html.j2",
+}
 
 
 @cache

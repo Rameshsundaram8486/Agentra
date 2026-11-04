@@ -262,3 +262,31 @@ def test_reviewers_review_a_design_and_the_architect_answers_their_findings(
     for response in design.review_responses:
         print(f"- {response.finding}: {response.response[:160]}")
     assert design.version_no == 2 and len(design.review_responses) == open_count
+
+
+def test_developer_plans_a_backlog_from_an_approved_design(
+    approved_design: Team, run: Callable[..., Any], test_settings: Settings,
+    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore,
+) -> None:
+    """One real call: the Developer plans the backlog of a small scripted design that passed its reviews."""
+    if test_settings.anthropic_api_key is None:
+        pytest.fail("ANTHROPIC_API_KEY is not set in .env")
+    live = AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, AnthropicProvider(test_settings.anthropic_api_key.get_secret_value())))
+    team = approved_design
+    design = run(lambda s: s.design.current_version_id(team.project.id))
+    data = AgentRunCreate(agent_key="developer", task_key="plan_backlog", artifact_version_id=design)
+    queued = run(lambda s: s.executions.request_run(team.pm.actor, team.project.id, data)).run
+    live.handle(ClaimedJob(uuid.uuid4(), "agent_run", {"agent_run_id": str(queued.id)}, "live", 1))
+    detail = run(lambda s: s.executions.get_run(team.owner.actor, queued.id))
+    call = detail.model_calls[0] if detail.model_calls else None
+    print(f"\nplan_backlog: status={detail.status} cost=${detail.cost_usd} out_tokens={call.output_tokens if call else '-'} latency={call.latency_ms if call else '-'}ms")
+    for finding in detail.findings:
+        print(f"  finding: {finding.severity} {finding.check} {finding.path}: {finding.message}")
+    assert detail.status == "succeeded", f"{detail.error_code}: {detail.error_message}"
+
+    backlog = run(lambda s: s.backlog.view(team.owner.actor, team.project.id))
+    print(f"backlog v{backlog.version_no}: {len(backlog.epics)} epics, {len(backlog.items)} items, sizes {backlog.estimates}, waves {backlog.waves}")
+    for item in backlog.items:
+        print(f"- {item.item_id} [{item.epic_id}, {item.work_type}, {item.estimate}, wave {item.wave}] {item.title} -> {', '.join(item.design_items)}"
+              + (f" after {', '.join(item.depends_on)}" if item.depends_on else ""))
+    assert run(lambda s: s.backlog.gate_failures(team.project.id)) == ["Implementation backlog v1 is not approved"]

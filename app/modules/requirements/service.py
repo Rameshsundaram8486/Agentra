@@ -100,8 +100,10 @@ class RequirementsService:
         projects: ProjectsService,
         change_request_roles: Sequence[str] = ("owner", "customer_approver"),
         design_lookup: Callable[[uuid.UUID], Mapping[str, list[str]] | None] | None = None,
+        backlog_lookup: Callable[[uuid.UUID], Mapping[str, list[str]] | None] | None = None,
     ) -> None:
-        """design_lookup(project_id) maps requirement IDs to the design items covering them (design module)."""
+        """design_lookup(project_id) maps requirement IDs to the design items covering them (design module);
+        backlog_lookup(project_id) to the work items implementing them (backlog module)."""
         self._session = session
         self._clock = clock
         self._audit = audit
@@ -111,6 +113,7 @@ class RequirementsService:
         self._projects = projects
         self._change_request_roles = tuple(change_request_roles)
         self._design_lookup = design_lookup
+        self._backlog_lookup = backlog_lookup
 
     # For agent tasks --------------------------------------------------------------------------
 
@@ -339,7 +342,8 @@ class RequirementsService:
         if record is None:
             return None
         design = self._design_lookup(project_id) if self._design_lookup else None
-        rows, gaps = build_rows([self._item_view(row) for row in repository.items_for(self._session, record.id)], design)
+        backlog = self._backlog_lookup(project_id) if self._backlog_lookup else None
+        rows, gaps = build_rows([self._item_view(row) for row in repository.items_for(self._session, record.id)], design, backlog)
         return TraceabilityView(
             version_id=record.id,
             version_no=record.version_no,

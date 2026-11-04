@@ -13,3 +13,11 @@ report_types:
     title: Detailed BRD and traceability report
     phase: 7
     customer_visible: false
+  design_summary:
+    title: Design summary
+    phase: 8
+    customer_visible: true  # review outcomes as counts and sign-off status only; findings stay in the design pack
+  design_detailed:
+    title: Detailed design pack
+    phase: 8
+    customer_visible: false

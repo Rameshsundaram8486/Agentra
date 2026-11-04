@@ -285,14 +285,14 @@ async function loadTraceability() {
       h("td", { class: "small" }, row.objectives.join(", ") || "-"),
       h("td", { class: "small" }, row.user_stories.join(", ") || "-"),
       h("td", { class: "num" }, String(row.acceptance_criteria.length)),
-      h("td", { class: "small muted" }, `${row.design}; ${row.tests}`),
+      h("td", { class: "small muted" }, `${row.design}; ${row.backlog}; ${row.tests}`),
     ),
   );
   document.getElementById("traceability").replaceChildren(
     h(
       "table",
       { class: "table" },
-      h("thead", {}, h("tr", {}, h("th", {}, "ID"), h("th", {}, "Requirement"), h("th", {}, "Objectives"), h("th", {}, "Stories"), h("th", {}, "Criteria"), h("th", {}, "Design / tests"))),
+      h("thead", {}, h("tr", {}, h("th", {}, "ID"), h("th", {}, "Requirement"), h("th", {}, "Objectives"), h("th", {}, "Stories"), h("th", {}, "Criteria"), h("th", {}, "Design / backlog / tests"))),
       h("tbody", {}, rows),
     ),
   );
@@ -540,7 +540,6 @@ async function loadDesign() {
   const section = document.getElementById("design-section");
   section.hidden = !view;
   if (!view) return;
-  await loadDesignReviews();
   const coverage = view.coverage;
   const parts = [
     h(
@@ -579,6 +578,44 @@ async function loadDesign() {
   );
   document.getElementById("component-diagram").textContent = view.component_diagram || "None.";
   document.getElementById("data-flow-diagram").textContent = view.data_flow_diagram || "None.";
+  await loadDesignReviews();
+}
+
+async function loadBacklog() {
+  const view = await api(`/api/projects/${encodeURIComponent(projectId)}/backlog`);
+  const section = document.getElementById("backlog-section");
+  section.hidden = !view;
+  if (!view) return;
+  const waves = Object.entries(view.waves).map(([wave, count]) => `wave ${wave}: ${count}`).join(", ");
+  document.getElementById("backlog-summary").replaceChildren(
+    ...[
+      h(
+        "div",
+        { class: "section-header" },
+        h("a", { class: "primary", href: `artifact.html?id=${encodeURIComponent(view.artifact_id)}` }, `${view.artifact_title} v${view.version_no}`),
+        statusBadge(view.approval_status),
+      ),
+      view.stale ? h("div", { class: "alert alert-error", role: "alert" }, `${view.stale_reason}. Ask the Developer to plan the current approved design.`) : null,
+      h("p", { class: "muted small" }, `Plans design v${view.design_version_no}. ${view.epics.length} epic(s), ${view.items.length} work item(s): ${view.estimates.S} S, ${view.estimates.M} M, ${view.estimates.L} L; ${waves}.`),
+      h("p", {}, view.summary),
+      ...view.review_responses.map((r) => h("div", { class: "small" }, `Review comment "${r.comment}": ${r.response}`)),
+    ].filter(Boolean),
+  );
+  const epics = Object.fromEntries(view.epics.map((e) => [e.epic_id, e.title]));
+  const rows = view.items.map((item) =>
+    h(
+      "tr",
+      {},
+      h("td", { class: "num" }, item.item_id),
+      h("td", {}, h("div", { class: "primary" }, item.title), h("div", { class: "sub" }, `${item.epic_id} ${epics[item.epic_id] ?? ""}`), h("div", { class: "sub" }, item.description)),
+      h("td", { class: "small" }, humanise(item.work_type), h("div", { class: "sub" }, `Implements ${item.design_items.join(", ")}`)),
+      h("td", { class: "small" }, item.requirements.join(", ") || "-", item.acceptance.length ? h("div", { class: "sub" }, item.acceptance.join(", ")) : null),
+      h("td", { class: "small" }, `${item.estimate}, wave ${item.wave}`, item.depends_on.length ? h("div", { class: "sub" }, `After ${item.depends_on.join(", ")}`) : null),
+    ),
+  );
+  document.getElementById("backlog-items").replaceChildren(
+    h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "ID"), h("th", {}, "Work item"), h("th", {}, "Type"), h("th", {}, "Requirements"), h("th", {}, "Size and order"))), h("tbody", {}, rows)),
+  );
 }
 
 async function refreshAfterRun() {
@@ -586,7 +623,7 @@ async function refreshAfterRun() {
     loadPhases(),
     loadDecisionSummary(),
     canViewIncidents ? loadIncidents() : Promise.resolve(),
-    loadRequirements().then(() => Promise.all([loadTraceability(), loadChangeRequests(), loadDesign()]).then(fillInputs)),
+    loadRequirements().then(() => Promise.all([loadTraceability(), loadChangeRequests(), loadDesign(), loadBacklog()]).then(fillInputs)),
     loadDocuments().then((artifacts) => fillBriefs(artifacts)),
   ]);
 }
@@ -658,6 +695,7 @@ const AGENT_TASKS = [
   { agent: "solution_architect", task: "draft_design", label: "Solution Architect: draft the design", input: "requirements" },
   { agent: "security_reviewer", task: "review_security", label: "Security Reviewer: review the design's security", input: "design" },
   { agent: "developer", task: "review_feasibility", label: "Developer: review the design's feasibility", input: "design" },
+  { agent: "developer", task: "plan_backlog", label: "Developer: plan the implementation backlog", input: "approved_design" },
 ];
 let projectBriefs = [];
 
@@ -674,6 +712,12 @@ function fillInputs() {
   if (choice.input === "brief") {
     options = projectBriefs.map((brief) => h("option", { value: brief.current_version.id }, `${brief.title} (v${brief.current_version_no})`));
     missing = "Add a document of type Project brief first; the agent works from it.";
+  } else if (choice.input === "approved_design") {
+    if (currentDesign && !currentDesign.stale && currentDesign.approval_status === "approved") {
+      options = [h("option", { value: currentDesign.version_id }, `${currentDesign.artifact_title} v${currentDesign.version_no} (approved)`)];
+    } else {
+      missing = "The backlog is planned from the approved design; approve the design first.";
+    }
   } else if (choice.input === "design") {
     if (currentDesign && !currentDesign.stale) {
       options = [h("option", { value: currentDesign.version_id }, `${currentDesign.artifact_title} v${currentDesign.version_no}`)];
@@ -851,7 +895,7 @@ startPage(async () => {
   if (can("artifact.view")) {
     await loadRequirements();
     enableChangeRequests();
-    await Promise.all([loadTraceability(), loadChangeRequests(), loadDesign()]);
+    await Promise.all([loadTraceability(), loadChangeRequests(), loadDesign(), loadBacklog()]);
   }
   if (can("agent_run.view")) {
     enableAgent(artifacts, can("agent.run"));

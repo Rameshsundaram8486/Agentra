@@ -40,7 +40,8 @@ from app.modules.identity.service import SYSTEM_ACTOR, Actor
 from app.modules.projects.service import ProjectCreate, ProjectView
 from app.modules.workflow.service import TransitionRequest
 from tests.agent_support import (
-    BRIEF, DISCOVERY_NOTES, ask, ba_json, compare_output, draft_items, draft_json, feasibility_json, move_task, phase_task, process, security_json,
+    BRIEF, DISCOVERY_NOTES, ask, ba_json, backlog_json, compare_output, design_json, draft_items, draft_json, feasibility_json, move_task, phase_task,
+    process, security_json,
 )
 from tests.support import DEFAULT_PASSWORD, Team, TestUser, alembic_config
 
@@ -489,3 +490,53 @@ def pass_reviews(
         model.requests.clear()
 
     return _pass
+
+
+@pytest.fixture
+def approved_design(
+    review_team: Team, run: Callable[..., Any], runner_for: Callable[..., AgentRunner], model: FakeProvider, pass_reviews: Callable[[Team], None],
+) -> Team:
+    """A design drafted, both reviews passed, the design approved and its task closed; the Developer is on the team."""
+    team = review_team
+    requirements = run(lambda s: s.requirements.view(team.owner.actor, team.project.id)).version_id
+    data = AgentRunCreate(agent_key="solution_architect", task_key="draft_design", artifact_version_id=requirements)
+    model.add(fake_response(design_json()))
+    process(runner_for(), run(lambda s: s.executions.request_run(team.pm.actor, team.project.id, data)).run.id)
+    pass_reviews(team)
+    approve_design(run, team)
+    return team
+
+
+def approve_design(run: Callable[..., Any], team: Team) -> None:
+    """Approves the current design as the reviewer and closes the Draft design task."""
+    version_id = run(lambda s: s.design.current_version_id(team.project.id))
+    run(lambda s: s.decisions.record_approval(team.reviewer.actor, version_id, ApprovalCreate(
+        decision="approved", content_sha256=s.artifacts.version_record(version_id).content_sha256)))
+    task = phase_task(run, team, "draft_design", phase=8)
+    if task.state != "completed":
+        move_task(run, team.reviewer.actor, task, "completed")
+
+
+@pytest.fixture
+def plan_backlog(
+    run: Callable[..., Any], runner_for: Callable[..., AgentRunner], model: FakeProvider, developer_agent: TestUser, add_member: Callable[..., None],
+) -> Callable[..., Any]:
+    """plan_backlog(team, output=backlog_json(), approve=True): the Developer plans the current approved design; the PM
+    approves the backlog. Returns the run detail."""
+
+    def _plan(team: Team, output: str | None = None, *, approve: bool = True) -> Any:
+        if "agent" not in run(lambda s: s.identity.roles_for(developer_agent.actor, team.project.id)):
+            add_member(team.owner, team.project.id, developer_agent, "agent")
+        design = run(lambda s: s.design.current_version_id(team.project.id))
+        data = AgentRunCreate(agent_key="developer", task_key="plan_backlog", artifact_version_id=design)
+        model.add(fake_response(output or backlog_json()))
+        run_id = run(lambda s: s.executions.request_run(team.pm.actor, team.project.id, data)).run.id
+        process(runner_for(), run_id)
+        detail = run(lambda s: s.executions.get_run(team.owner.actor, run_id))
+        if approve and detail.status == "succeeded":
+            version_id = run(lambda s: s.backlog.view(team.owner.actor, team.project.id)).version_id
+            run(lambda s: s.decisions.record_approval(team.pm.actor, version_id, ApprovalCreate(
+                decision="approved", content_sha256=s.artifacts.version_record(version_id).content_sha256)))
+        return detail
+
+    return _plan

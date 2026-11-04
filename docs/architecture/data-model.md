@@ -65,6 +65,9 @@ erDiagram
 | `design_ids` | design | The design item IDs a project has issued | Never reused. **Append-only**. |
 | `design_reviews` | design_reviews | One security or feasibility review, tied to one review document version and to the exact design version it reviews | Kind, the reviewed design version, the checklist version and hash (security), summary, responses to review comments. **Append-only**. |
 | `design_review_findings` | design_reviews | One answer per checklist item (security) or per design item (feasibility) | Ref (SC-01 or a design item ID), verdict, severity (security gaps) or complexity (feasibility), assessment, recommendation, cited design items and requirements, unverified capabilities. **Append-only**. |
+| `backlog_versions` | backlog | One planned backlog, tied to one implementation_backlog document version and the approved design version it plans | Summary, epics, responses to review comments. **Append-only**. |
+| `backlog_items` | backlog | Each work item | Work item ID (WI-001 ...), epic, work type, design items it implements, requirements (stated plus those of its design items), acceptance-criterion refs, size, dependencies, wave. **Append-only**. |
+| `backlog_ids` | backlog | The epic and work item IDs a project has issued | Never reused. **Append-only**. |
 | `jobs` | infrastructure | Background job queue | One job per `idempotency_key`. Claimed with `FOR UPDATE SKIP LOCKED` under a lease; reclaimed when the lease expires; `dead` after `max_attempts`. |
 | `outbox_messages` | infrastructure | External side effects | Written in the same transaction as the change that causes them. Delivered at least once, and handlers receive the idempotency key. |
 
@@ -81,5 +84,5 @@ erDiagram
 
 ## Planned additions
 
-- Increment 4c: implementation backlog, design change requests, Phase 8 reports.
+- Increment 4d: design change requests.
 - Later: tool calls.

@@ -330,3 +330,36 @@ def kept_design_items() -> list[dict[str, Any]]:
     for item in items:
         item["ref"], item["related"] = ids[item["ref"]], [ids[ref] for ref in item["related"]]
     return items
+
+
+# Scripted Developer backlog (Phase 8). Plans the design from design_items(): every buildable item is implemented.
+
+def witem(ref: str, design_items: list[str], wave: int = 1, depends_on: list[str] | None = None, **changes: Any) -> dict[str, Any]:
+    item = {
+        "ref": ref, "epic": "new-e1", "title": f"Build {', '.join(design_items)}", "description": f"Implement {', '.join(design_items)}.",
+        "work_type": "build", "design_items": design_items, "requirements": [], "acceptance_criteria": [], "estimate": "M",
+        "depends_on": depends_on or [], "wave": wave,
+    }
+    item.update(changes)
+    return item
+
+
+def backlog_items() -> list[dict[str, Any]]:
+    return [
+        witem("new-1", ["ENV-001"], work_type="deploy", estimate="S"),
+        witem("new-2", ["SEC-001"], work_type="configure"),
+        witem("new-3", ["ENT-001"], depends_on=["new-1"]),
+        witem("new-4", ["CMP-001"], wave=2, depends_on=["new-3", "new-2"], acceptance_criteria=["REQ-F-001.AC1"]),
+        witem("new-5", ["API-001"], wave=2, depends_on=["new-4"], work_type="integrate", requirements=["REQ-F-002"]),
+    ]
+
+
+def backlog_json(items: list[dict[str, Any]] | None = None, epics: list[dict[str, Any]] | None = None, **changes: Any) -> str:
+    output = {
+        "summary": "Foundations first, then the app and its reminders.",
+        "epics": epics if epics is not None else [{"ref": "new-e1", "title": "Leave app", "description": "The Power Apps leave app."}],
+        "items": items if items is not None else backlog_items(),
+        "review_responses": [],
+    }
+    output.update(changes)
+    return json.dumps(output)

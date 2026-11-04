@@ -179,8 +179,12 @@ def test_designs_with_unknown_requirements_or_items_save_nothing(
 
 
 def _complete_phase_8(run: Run, team: Team) -> Any:
-    for key in ("draft_design", "review_security", "review_feasibility"):
-        move_task(run, team.reviewer.actor, _sa_task(run, team, key), "completed")
+    for key in ("draft_design", "review_security", "review_feasibility", "plan_backlog"):
+        task = _sa_task(run, team, key)
+        if task.state == "not_started":
+            move_task(run, team.owner.actor, task, "cancelled")  # the backlog_current exit check still applies
+        elif task.state != "completed":
+            move_task(run, team.reviewer.actor, task, "completed")
     _move_phase(run, team.pm.actor, team, 8, "waiting_for_review")
     return _move_phase(run, team.reviewer.actor, team, 8, "completed")
 
@@ -205,7 +209,8 @@ def test_phase_8_cannot_complete_while_a_confirmed_requirement_is_uncovered(
 
 
 def test_a_documented_exception_counts_as_covered_and_the_phase_completes(
-    option_chosen: Team, run: Run, runner_for: Callable[..., AgentRunner], model: FakeProvider, pass_reviews: Callable[[Team], None]
+    option_chosen: Team, run: Run, runner_for: Callable[..., AgentRunner], model: FakeProvider, pass_reviews: Callable[[Team], None],
+    plan_backlog: Callable[..., Any],
 ) -> None:
     team = option_chosen
     items = design_items()
@@ -218,6 +223,8 @@ def test_a_documented_exception_counts_as_covered_and_the_phase_completes(
     assert (view.coverage.gaps, view.coverage.excepted) == ([], 1)
     pass_reviews(team)
     _approve(run, team.reviewer, view.version_id)
+    move_task(run, team.reviewer.actor, _sa_task(run, team, "draft_design"), "completed")
+    plan_backlog(team)
 
     assert _complete_phase_8(run, team).state == "completed"
 

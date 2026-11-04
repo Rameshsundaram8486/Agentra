@@ -28,7 +28,8 @@ from app.modules.projects.service import ProjectCreate
 from app.modules.requirements.service import ChangeRequestCreate
 from app.modules.workflow.service import TransitionRequest
 from tests.agent_support import (
-    BRIEF, DISCOVERY_NOTES, ba_json, compare_output, design_json, draft_items, draft_json, feasibility_json, process, security_findings, security_json,
+    BRIEF, DISCOVERY_NOTES, ba_json, backlog_json, compare_output, design_json, draft_items, draft_json, feasibility_json, kept_design_items, process,
+    security_findings, security_json,
 )
 from tests.support import make_docx
 
@@ -59,8 +60,8 @@ docx_path.write_bytes(make_docx("Discovery notes", "Leave approvals happen weekl
 
 def change_control_project() -> str:
     """Brief clarified; a failed draft (INC-001) then a good one, approved; CR-001 raised and still open; Phase 7
-    completed; Phase 8 options compared and chosen, design drafted, its security review showing a high gap (SC-03)
-    and a clean feasibility review."""
+    completed; Phase 8 options compared and chosen; design v1 with a high security gap (SC-03), redrafted as v2
+    answering it, reviewed again, signed off and approved; the implementation backlog planned and approved."""
     settings = get_settings()
     policies = load_policies(min_password_length=settings.min_password_length)
     engine = create_db_engine(settings.database_url.get_secret_value())
@@ -157,15 +158,31 @@ def change_control_project() -> str:
     model.add(fake_response(design_json()))
     ask_architect("draft_design")
 
-    design_version = run(lambda s: s.design.current_version_id(project.id))
-    for key, task_key, output in (
-        ("security_reviewer", "review_security", security_json(security_findings(SC_03="high"))),
-        ("developer", "review_feasibility", feasibility_json()),
-    ):
-        run(lambda s, k=key: s.identity.add_member(admin, project.id, f"{k}@agents.agentra.local", "agent"))
+    def ask_agent(key: str, task_key: str, output: str) -> None:
+        design_version = run(lambda s: s.design.current_version_id(project.id))
         model.add(fake_response(output))
         data = AgentRunCreate(agent_key=key, task_key=task_key, artifact_version_id=design_version)
-        process(runner, run(lambda s, d=data: s.executions.request_run(pm, project.id, d)).run.id)
+        process(runner, run(lambda s: s.executions.request_run(pm, project.id, data)).run.id)
+
+    def approve(who: Actor, version_id: Any) -> None:
+        run(lambda s: s.decisions.record_approval(who, version_id, ApprovalCreate(
+            decision="approved", content_sha256=s.artifacts.version_record(version_id).content_sha256)))
+
+    for key in ("security_reviewer", "developer"):
+        run(lambda s, k=key: s.identity.add_member(admin, project.id, f"{k}@agents.agentra.local", "agent"))
+    # Design v1: a high security gap; the redraft (v2) answers it; v2 is reviewed cleanly, signed off and approved.
+    ask_agent("security_reviewer", "review_security", security_json(security_findings(SC_03="high")))
+    ask_agent("developer", "review_feasibility", feasibility_json())
+    model.add(fake_response(design_json(kept_design_items(), review_responses=[{"ref": "FND-1", "response": "SEC-001 now encrypts leave data at rest."}])))
+    ask_architect("draft_design")
+    ask_agent("security_reviewer", "review_security", security_json(security_findings(SC_08="medium")))
+    ask_agent("developer", "review_feasibility", feasibility_json())
+    approve(reviewer, run(lambda s: s.design_reviews.view(admin, project.id)).security.version_id)
+    approve(reviewer, run(lambda s: s.design.current_version_id(project.id)))
+    move8(reviewer, "task", "draft_design", "completed")
+    # The backlog planned from design v2, approved by the PM.
+    ask_agent("developer", "plan_backlog", backlog_json())
+    approve(pm, run(lambda s: s.backlog.view(admin, project.id)).version_id)
     engine.dispose()
     return str(project.id)
 

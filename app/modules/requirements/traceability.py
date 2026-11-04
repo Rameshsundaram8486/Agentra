@@ -1,5 +1,6 @@
 """Requirements traceability matrix: objective <- requirement -> user stories -> acceptance criteria -> design
-items, with the sources behind each requirement. The design column comes from Phase 8, tests from Phase 10.
+items -> backlog work items, with the sources behind each requirement. The design and backlog columns come from
+Phase 8, tests from Phase 10.
 Built only from stored items; the same items always give the same rows and the same CSV.
 """
 
@@ -11,6 +12,7 @@ from app.modules.requirements.schemas import RequirementItemView, TraceRow, Trac
 
 TRACED_KINDS = ("functional", "non_functional", "business_rule")
 NOT_YET_DESIGN = "Not yet (Phase 8)"
+NOT_YET_BACKLOG = "Not yet (backlog)"
 NOT_YET_TESTS = "Not yet (Phase 10)"
 
 
@@ -24,8 +26,11 @@ def _source(item: RequirementItemView) -> list[str]:
     return out
 
 
-def build_rows(items: Sequence[RequirementItemView], design: Mapping[str, list[str]] | None = None) -> tuple[list[TraceRow], list[str]]:
-    """design: requirement ID -> design item IDs (or an exception note) for the current design; None before there is one."""
+def build_rows(
+    items: Sequence[RequirementItemView], design: Mapping[str, list[str]] | None = None, backlog: Mapping[str, list[str]] | None = None
+) -> tuple[list[TraceRow], list[str]]:
+    """design: requirement ID -> design item IDs (or an exception note) for the current design; backlog: requirement
+    ID -> work item IDs of the current backlog. None before there is one."""
     by_id = {item.item_id: item for item in items}
     objectives = [item for item in items if item.kind == "objective"]
     stories = [item for item in items if item.kind == "user_story"]
@@ -51,6 +56,7 @@ def build_rows(items: Sequence[RequirementItemView], design: Mapping[str, list[s
                 acceptance_criteria=[f"{item.item_id}.AC{n} {text}" for n, text in enumerate(item.acceptance_criteria, start=1)],
                 sources=_source(item),
                 design=NOT_YET_DESIGN if design is None else (", ".join(design.get(item.item_id, [])) or "Not covered"),
+                backlog=NOT_YET_BACKLOG if backlog is None else (", ".join(backlog.get(item.item_id, [])) or "No work item"),
                 tests=NOT_YET_TESTS,
                 gaps=gaps,
             )
@@ -69,7 +75,7 @@ def build_rows(items: Sequence[RequirementItemView], design: Mapping[str, list[s
 def to_csv(view: TraceabilityView) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
-    writer.writerow(["Requirement", "Kind", "Title", "Status", "Objectives", "User stories", "Acceptance criteria", "Sources", "Design", "Tests", "Gaps"])
+    writer.writerow(["Requirement", "Kind", "Title", "Status", "Objectives", "User stories", "Acceptance criteria", "Sources", "Design", "Backlog", "Tests", "Gaps"])
     for row in view.rows:
         writer.writerow(
             [
@@ -82,6 +88,7 @@ def to_csv(view: TraceabilityView) -> str:
                 " | ".join(row.acceptance_criteria),
                 " | ".join(row.sources),
                 row.design,
+                row.backlog,
                 row.tests,
                 "; ".join(row.gaps),
             ]

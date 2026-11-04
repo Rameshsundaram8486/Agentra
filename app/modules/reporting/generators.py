@@ -11,7 +11,7 @@ from typing import Any
 
 NO_DUE_DATE = "No due date set"
 LIMITATIONS = [
-    "Design and test columns of the traceability matrix are filled from Phases 8 and 10.",
+    "Design and backlog columns of the traceability matrix are filled from Phase 8, tests from Phase 10.",
     "Defects: not applicable until Phase 10 (testing).",
     "Due dates are not tracked for decisions, reviews or change requests yet; only incident corrective actions have target dates.",
 ]
@@ -36,6 +36,11 @@ class ReportInputs:
     runs: list[Any] = field(default_factory=list)
     incidents: list[Any] = field(default_factory=list)
     names: Mapping[uuid.UUID, str] = field(default_factory=dict)
+    # Phase 8: the design, its reviews and the backlog, and their documents (ArtifactDetail) with approvals.
+    phase_documents: list[Any] = field(default_factory=list)
+    design: Any = None
+    reviews: Any = None
+    backlog: Any = None
 
 
 def ts(value: datetime | None) -> str | None:
@@ -49,7 +54,7 @@ def label(value: str | None) -> str:
 def data_as_of(inputs: ReportInputs) -> datetime | None:
     """The newest record the report includes."""
     stamps: list[datetime] = [inputs.phase.updated_at, *(t.updated_at for t in inputs.phase.tasks)]
-    for detail in [*inputs.documents, *([inputs.baseline] if inputs.baseline else [])]:
+    for detail in [*inputs.documents, *([inputs.baseline] if inputs.baseline else []), *inputs.phase_documents]:
         stamps += [version.created_at for version in detail.versions]
     stamps += [a.created_at for approvals in inputs.approvals.values() for a in approvals.history]
     for decision in inputs.decisions:
@@ -267,6 +272,7 @@ def detailed_data(inputs: ReportInputs) -> dict[str, Any]:
                 "stories": list(r.user_stories),
                 "criteria": list(r.acceptance_criteria),
                 "design": r.design,
+                "backlog": r.backlog,
                 "tests": r.tests,
                 "gaps": list(r.gaps),
             }

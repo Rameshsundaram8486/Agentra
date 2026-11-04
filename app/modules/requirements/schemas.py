@@ -183,6 +183,7 @@ class TraceRow(BaseModel):
     acceptance_criteria: list[str] = Field(description="Numbered: REQ-F-001.AC1 ...")
     sources: list[str]
     design: str
+    backlog: str
     tests: str
     gaps: list[str]
 

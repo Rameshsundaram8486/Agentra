@@ -134,7 +134,7 @@ def test_who_may_generate_and_see_which_reports(
     assert response.status_code == 200 and response.headers["content-type"].startswith("text/html")
     assert "default-src 'none'" in response.headers["content-security-policy"] and response.headers["x-frame-options"] == "SAMEORIGIN"
     assert client_for(make_user(name="Outsider")).get(f"/api/reports/{summary.id}").status_code == 404
-    assert [t["key"] for t in client.get(f"/api/projects/{team.project.id}/report-types").json()] == ["requirements_summary"]
+    assert [t["key"] for t in client.get(f"/api/projects/{team.project.id}/report-types").json()] == ["requirements_summary", "design_summary"]
 
 
 def test_report_versions_cannot_be_edited(drafted: Team, run: Run, session_factory: sessionmaker[Session]) -> None:

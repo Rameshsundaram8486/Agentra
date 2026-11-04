@@ -1,0 +1,128 @@
+{# Detailed design pack (Phase 8, internal): the summary, then the review gate, design items, coverage, review findings,
+   the architect's responses, the backlog, document versions and approvals, workflow history and agent activity. #}
+{% extends "design_summary.html.j2" %}
+{% block content %}
+{{ super() }}
+
+<section>
+  <h2>Review gate</h2>
+  {% if data.gate %}
+  <ul>{% for g in data.gate %}<li>{{ g }}</li>{% endfor %}</ul>
+  {% else %}<p>Nothing from the reviews stops the current design from being approved.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Design items</h2>
+  {% if data.design_items %}
+  <table>
+    <thead><tr><th>ID</th><th>Item</th><th>Kind</th><th>Satisfies</th><th>Status</th></tr></thead>
+    <tbody>{% for i in data.design_items %}
+      <tr><td>{{ i.id }}</td><td><strong>{{ i.title }}</strong><br>{{ i.description }}{% if i.rationale %}<br><span class="muted">Rationale: {{ i.rationale }}</span>{% endif %}
+        {% if i.unverified %}<br><span class="muted">To verify: {{ i.unverified | join("; ") }}</span>{% endif %}
+        {% if i.flags %}<br><span class="muted">{{ i.flags | join("; ") }}</span>{% endif %}</td>
+        <td>{{ i.kind }}{% if i.related %}<br><span class="muted">With {{ i.related | join(", ") }}</span>{% endif %}</td>
+        <td>{{ i.satisfies | join(", ") or "-" }}</td><td>{{ i.status }} ({{ i.label }})</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% else %}<p class="missing">No design items.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Requirement coverage</h2>
+  {% if data.coverage_rows %}
+  <table>
+    <thead><tr><th>Requirement</th><th>Status</th><th>Design items</th><th>Exception</th></tr></thead>
+    <tbody>{% for r in data.coverage_rows %}
+      <tr><td>{{ r.id }} {{ r.title }}</td><td>{{ r.status }}</td><td{% if not r.design_items and not r.exception %} class="missing"{% endif %}>{{ r.design_items | join(", ") or "-" }}</td><td>{{ r.exception or "-" }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% else %}<p class="missing">No coverage yet.</p>{% endif %}
+</section>
+
+{% for heading, findings in [("Security review findings", data.security_findings), ("Feasibility review findings", data.feasibility_findings)] %}
+<section>
+  <h2>{{ heading }}</h2>
+  {% if findings %}
+  <table>
+    <thead><tr><th>Ref</th><th>Verdict</th><th>Assessment</th><th>Recommendation</th></tr></thead>
+    <tbody>{% for f in findings %}
+      <tr><td>{{ f.ref }} {{ f.title }}</td><td>{{ f.verdict }}{% if f.severity %} ({{ f.severity }}){% endif %}{% if f.complexity %} ({{ f.complexity }}){% endif %}</td>
+        <td>{{ f.assessment }}{% if f.design_items %}<br><span class="muted">{{ f.design_items | join(", ") }}</span>{% endif %}{% if f.unverified %}<br><span class="muted">To verify: {{ f.unverified | join("; ") }}</span>{% endif %}</td>
+        <td>{{ f.recommendation or "-" }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% else %}<p class="missing">No review yet.</p>{% endif %}
+</section>
+{% endfor %}
+
+<section>
+  <h2>Responses in the current design</h2>
+  {% if data.design_responses %}
+  <ul>{% for r in data.design_responses %}<li><strong>{{ r.finding }}</strong>: "{{ r.comment }}"<br>Response: {{ r.response }}</li>{% endfor %}</ul>
+  {% else %}<p>The current design version answers no review comments or findings.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Backlog</h2>
+  {% if data.work_items %}
+  {% for e in data.epics %}
+  <h3>{{ e.id }} {{ e.title }}</h3>
+  <p>{{ e.description }}</p>
+  <table>
+    <thead><tr><th>Work item</th><th>Type</th><th>Implements</th><th>Requirements and criteria</th><th>Size</th><th>Wave</th><th>Depends on</th></tr></thead>
+    <tbody>{% for i in data.work_items if i.epic == e.id %}
+      <tr><td>{{ i.id }} {{ i.title }}</td><td>{{ i.work_type }}</td><td>{{ i.design_items | join(", ") }}</td>
+        <td>{{ i.requirements | join(", ") or "-" }}{% if i.acceptance %}<br><span class="muted">{{ i.acceptance | join(", ") }}</span>{% endif %}</td>
+        <td>{{ i.estimate }}</td><td class="num">{{ i.wave }}</td><td>{{ i.depends_on | join(", ") or "-" }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% endfor %}
+  {% else %}<p class="missing">No backlog yet.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Documents and versions</h2>
+  {% for doc in data.documents %}
+  <h3>{{ doc.title }} <span class="muted">({{ doc.type }})</span></h3>
+  <ul>{% for v in doc.versions %}
+    <li>v{{ v.version_no }}, {{ v.at }}, by {{ v.author }}: {{ v.change_summary }} <span class="hash">sha256 {{ v.sha256[:12] }}</span>
+      {% for r in v.reviews %}<br><span class="muted">{{ r.decision }} by {{ r.by }} on {{ r.at }}{% if r.comment %}: {{ r.comment }}{% endif %}</span>{% endfor %}</li>
+  {% endfor %}</ul>
+  {% else %}<p class="missing">No Phase 8 documents yet.</p>{% endfor %}
+</section>
+
+<section>
+  <h2>Approvals</h2>
+  {% if data.approvals %}
+  <table>
+    <thead><tr><th>When</th><th>Document</th><th>Decision</th><th>By</th><th>Content</th></tr></thead>
+    <tbody>{% for a in data.approvals %}<tr><td>{{ a.at }}</td><td>{{ a.artifact }} v{{ a.version_no }}</td><td>{{ a.decision }}{% if a.comment %}<br><span class="muted">{{ a.comment }}</span>{% endif %}</td><td>{{ a.by }}</td><td class="hash">sha256 {{ a.sha256[:12] }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p class="missing">No approvals recorded yet.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Workflow history</h2>
+  <h3>Phase {{ data.phase.number }}</h3>
+  <ul>{% for h in data.phase_history %}<li><span class="muted">{{ h.at }}</span> {{ h.from }} to {{ h.to }} by {{ h.by }}: {{ h.reason }}</li>{% else %}<li class="missing">No changes recorded.</li>{% endfor %}</ul>
+  {% for task in data.tasks %}
+  <h3>Task: {{ task.title }} ({{ task.state }})</h3>
+  <ul>{% for h in task.history %}<li><span class="muted">{{ h.at }}</span> {{ h.from }} to {{ h.to }} by {{ h.by }}: {{ h.reason }}</li>{% else %}<li class="missing">No changes recorded.</li>{% endfor %}</ul>
+  {% endfor %}
+</section>
+
+<section>
+  <h2>Agent activity</h2>
+  {% if data.agent_runs %}
+  <table>
+    <thead><tr><th>When</th><th>Task</th><th>Input</th><th>Status</th><th>Model</th><th>Cost (USD)</th><th>Prompt version</th></tr></thead>
+    <tbody>{% for r in data.agent_runs %}
+      <tr><td>{{ r.at }}</td><td>{{ r.task }}<br><span class="muted">asked by {{ r.requested_by or "unknown" }}</span></td><td>{{ r.input }}</td>
+        <td>{{ r.status }}{% if r.error %}<br><span class="muted">{{ r.error }}</span>{% endif %}</td>
+        <td>{{ r.model }}</td><td class="num">{{ r.cost_usd }}</td><td class="hash">{{ r.prompt_version }}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  <p class="muted">Total model cost of the Phase 8 agents: USD {{ data.total_cost_usd }}.</p>
+  {% else %}<p class="missing">No Phase 8 agent runs yet.</p>{% endif %}
+</section>
+{% endblock %}

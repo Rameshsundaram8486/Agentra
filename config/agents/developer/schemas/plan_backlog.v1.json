@@ -1,0 +1,162 @@
+{
+  "$comment": "Output of developer.plan_backlog. Sent to the model as the structured output format; IDs, design coverage, references, waves and dependency cycles are enforced in code (app/modules/backlog/rules.py).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "epics",
+    "items",
+    "review_responses"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "A few sentences on how the work is organised, the delivery waves and the main dependencies."
+    },
+    "epics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/epic"
+      },
+      "description": "Groups of related work, usually by component or capability."
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/work_item"
+      },
+      "description": "Work items, in delivery order."
+    },
+    "review_responses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/review_response"
+      }
+    }
+  },
+  "$defs": {
+    "epic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "title",
+        "description"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "An existing epic ID (EP-001) to keep it, or new-e1, new-e2 ..."
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "work_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "epic",
+        "title",
+        "description",
+        "work_type",
+        "design_items",
+        "requirements",
+        "acceptance_criteria",
+        "estimate",
+        "depends_on",
+        "wave"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "An existing work item ID (WI-001) to keep it, or new-1, new-2 ..."
+        },
+        "epic": {
+          "type": "string",
+          "description": "The ref of its epic in this output."
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string",
+          "description": "What to build or configure, precisely enough for a developer to start."
+        },
+        "work_type": {
+          "type": "string",
+          "enum": [
+            "build",
+            "configure",
+            "integrate",
+            "migrate",
+            "deploy"
+          ]
+        },
+        "design_items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of the design items it implements (at least one)."
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of requirements it delivers beyond those its design items satisfy."
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Acceptance criteria it must meet, e.g. REQ-F-001.AC1."
+        },
+        "estimate": {
+          "type": "string",
+          "enum": [
+            "S",
+            "M",
+            "L"
+          ],
+          "description": "S (days), M (one to two weeks), L (more)."
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Refs of work items that must be done first (same or earlier wave)."
+        },
+        "wave": {
+          "type": "integer",
+          "description": "Delivery wave, 1 first."
+        }
+      }
+    },
+    "review_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "response"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "REV-n of the review comment answered."
+        },
+        "response": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

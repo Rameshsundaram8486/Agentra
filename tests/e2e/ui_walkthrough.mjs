@@ -266,7 +266,11 @@ async function main() {
   await step("an approved baseline shows its traceability and an open change request", async () => {
     await login("admin");
     const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
-    await goto(crUrl, "document.querySelector('#change-requests li[data-cr=CR-001]') !== null", "change request listed");
+    await goto(
+      crUrl,
+      "document.querySelector('#change-requests li[data-cr=CR-001]') !== null && document.getElementById('traceability').innerText.includes('REQ-F-001')",
+      "change request and traceability listed",
+    );
     const summary = await text("#requirements-summary");
     if (!summary.includes("under change control")) throw new Error("baseline not shown as locked: " + summary);
     if (/(^|\W)(null|undefined)(\W|$)/.test(summary + (await text("#traceability-gaps")))) throw new Error("empty value rendered as text: " + summary);
@@ -294,7 +298,11 @@ async function main() {
 
   await step("the solution design shows coverage, and the Solution Architect works from the approved requirements", async () => {
     const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
-    await goto(crUrl, "!document.getElementById('design-section').hidden", "design section");
+    await goto(
+      crUrl,
+      "document.getElementById('design-summary').innerText.includes('Coverage:') && document.querySelector('#agent-task option[value=\"developer:plan_backlog\"]') !== null",
+      "design summary and agent tasks",
+    );
     const summary = await text("#design-summary");
     if (!summary.includes("Coverage: 2 of 2 confirmed requirements covered")) throw new Error("coverage missing: " + summary);
     const items = await text("#design-items");
@@ -305,16 +313,44 @@ async function main() {
     await shot("11-solution-design");
   });
 
-  await step("the design reviews show the high security gap blocking approval, and reviews work from the current design", async () => {
+  await step("the reviewed design answers the security finding, and both reviews of v2 are in place", async () => {
     const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
-    await goto(crUrl, "document.getElementById('design-reviews').innerText.includes('Feasibility review v1')", "design reviews");
+    await goto(crUrl, "document.getElementById('design-reviews').innerText.includes('Security review v2') && document.querySelector('#agent-task option[value=\"developer:plan_backlog\"]') !== null", "design reviews");
     const reviews = await text("#design-reviews");
-    for (const expected of ["Before this design version can be approved", "High-severity gaps: SC-03", "Security review v1", "Checklist: security_checklist v1"]) {
+    for (const expected of ["Both reviews of this design version are in place", "Reviews design v2", "Checklist: security_checklist v1"]) {
       if (!reviews.includes(expected)) throw new Error(`reviews missing ${expected}: ${reviews}`);
     }
+    if (!(await text("#design-summary")).includes("Security review v1: SC-03 (gap, high)")) throw new Error("design does not show its answer to the finding");
     await fill("#agent-task", "security_reviewer:review_security");
-    await waitFor("document.getElementById('agent-brief').innerText.includes('Solution design v1') && !document.getElementById('agent-submit').disabled", "current design offered");
+    await waitFor("document.getElementById('agent-brief').innerText.includes('Solution design v2') && !document.getElementById('agent-submit').disabled", "current design offered");
     await shot("11b-design-reviews");
+  });
+
+  await step("the approved backlog shows work items and feeds the traceability matrix", async () => {
+    const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
+    await goto(crUrl, "!document.getElementById('backlog-section').hidden && document.getElementById('traceability').innerText.includes('WI-004') && document.querySelector('#agent-task option[value=\"developer:plan_backlog\"]') !== null", "backlog section");
+    const summary = await text("#backlog-summary");
+    if (!summary.includes("Implementation backlog v1") || !summary.includes("Plans design v2")) throw new Error("backlog summary: " + summary);
+    const items = await text("#backlog-items");
+    for (const id of ["WI-001", "WI-004", "EP-001"]) if (!items.includes(id)) throw new Error(`backlog item ${id} missing`);
+    if (!(await text("#traceability")).includes("WI-004")) throw new Error("traceability backlog column empty");
+    await fill("#agent-task", "developer:plan_backlog");
+    await waitFor("document.getElementById('agent-brief').innerText.includes('Solution design v2 (approved)')", "approved design offered");
+    await shot("11c-backlog");
+  });
+
+  await step("owner generates the design summary; it shows review counts but no findings", async () => {
+    const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
+    await goto(crUrl, "document.querySelector('#report-actions button[data-report=design_summary]') !== null", "design report button");
+    await click("#report-actions button[data-report=design_summary]");
+    await waitFor("location.pathname.endsWith('/report.html') && document.getElementById('report-frame').src.includes('/html')", "report page");
+    const reportUrl = await evaluate("document.getElementById('report-frame').src");
+    const body = await evaluate(`fetch(${js(reportUrl)}).then((r) => r.text())`);
+    for (const expected of ["Design summary", "Implementation backlog v1", "Signed off by UI Reviewer", "gaps by severity: 0 high, 1 medium, 0 low"]) {
+      if (!body.includes(expected)) throw new Error(`design summary missing ${expected}`);
+    }
+    if (body.includes("SC-08")) throw new Error("the design summary shows a review finding");
+    await shot("12a-design-summary");
   });
 
   await step("owner generates the executive summary and views it in a sandboxed frame", async () => {

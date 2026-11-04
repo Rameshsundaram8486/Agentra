@@ -119,6 +119,11 @@ class DesignReviewsService:
             problems.append(f"Feasibility review v{version_no} of design v{design.version_no} rates items not feasible: {', '.join(blocked)}")
         return problems
 
+    def findings_for_design(self, design_version_id: uuid.UUID, kind: ReviewKind) -> list[FindingView]:
+        """The findings of the latest review of this kind of one design version (none if it was not reviewed)."""
+        review = repository.latest_for_design(self._session, design_version_id, kind)
+        return self._view(review.artifact_version_id).findings if review else []
+
     def gate_failures(self, project_id: uuid.UUID) -> list[str]:
         """Phase exit check design_reviews: the current design passes the review gate."""
         current = self._design.current_version_id(project_id)

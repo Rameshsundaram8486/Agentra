@@ -72,11 +72,11 @@
   <h2>Traceability matrix</h2>
   {% if data.traceability %}
   <table>
-    <thead><tr><th>Requirement</th><th>Objectives</th><th>User stories</th><th>Acceptance criteria</th><th>Design</th><th>Tests</th><th>Gaps</th></tr></thead>
+    <thead><tr><th>Requirement</th><th>Objectives</th><th>User stories</th><th>Acceptance criteria</th><th>Design</th><th>Backlog</th><th>Tests</th><th>Gaps</th></tr></thead>
     <tbody>{% for r in data.traceability %}
       <tr><td>{{ r.id }} {{ r.title }}</td><td>{{ r.objectives | join(", ") or "-" }}</td><td>{{ r.stories | join(", ") or "-" }}</td>
         <td>{% for c in r.criteria %}{{ c }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
-        <td class="missing">{{ r.design }}</td><td class="missing">{{ r.tests }}</td><td>{{ r.gaps | join("; ") or "-" }}</td></tr>
+        <td class="missing">{{ r.design }}</td><td class="missing">{{ r.backlog }}</td><td class="missing">{{ r.tests }}</td><td>{{ r.gaps | join("; ") or "-" }}</td></tr>
     {% endfor %}</tbody>
   </table>
   {% else %}<p class="missing">No traceability yet.</p>{% endif %}

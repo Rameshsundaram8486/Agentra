@@ -13,6 +13,7 @@ from app.infrastructure.storage.base import ArtifactStore
 from app.model_gateway.router import ModelConfig, load_model_config
 from app.modules.artifacts.service import ArtifactsService
 from app.modules.audit.service import AuditService
+from app.modules.backlog.service import BACKLOG_TYPE, BacklogService
 from app.modules.decisions.authority import ApprovalMatrix, load_approval_matrix
 from app.modules.decisions.service import DecisionsService
 from app.modules.design.service import DESIGN_TYPE, DesignService
@@ -31,7 +32,7 @@ from app.modules.workflow.definitions import WorkflowCatalog, WorkflowDefinition
 from app.modules.workflow.service import WorkflowService
 
 CONFIG_DIR = ROOT_DIR / "config"
-EXIT_CHECKS = frozenset({"design_coverage", "design_reviews"})  # named phase exit checks wired in Services.workflow
+EXIT_CHECKS = frozenset({"design_coverage", "design_reviews", "backlog_current"})  # named phase exit checks wired in Services.workflow
 
 
 @dataclass(frozen=True)
@@ -152,6 +153,7 @@ class Services:
             approval_checks={
                 DESIGN_TYPE: lambda version_id: self.design.approval_problems(version_id) + self.design_reviews.design_problems(version_id),
                 "security_review": lambda version_id: self.design_reviews.security_approval_problems(version_id),
+                BACKLOG_TYPE: lambda version_id: self.backlog.approval_problems(version_id),
             },
         )
 
@@ -169,6 +171,7 @@ class Services:
             exit_checks={
                 "design_coverage": lambda project_id: self.design.coverage_failures(project_id),
                 "design_reviews": lambda project_id: self.design_reviews.gate_failures(project_id),
+                "backlog_current": lambda project_id: self.backlog.gate_failures(project_id),
             },
         )
 
@@ -210,6 +213,9 @@ class Services:
             requirements=self.requirements,
             executions=self.executions,
             oversight=self.oversight,
+            design=self.design,
+            design_reviews=self.design_reviews,
+            backlog=self.backlog,
         )
 
     @cached_property
@@ -224,6 +230,7 @@ class Services:
             self.projects,
             self.policies.approvals.change_requests.required_roles,
             design_lookup=lambda project_id: self.design.coverage_by_requirement(project_id),
+            backlog_lookup=lambda project_id: self.backlog.requirement_lookup(project_id),
         )
 
     @cached_property
@@ -245,4 +252,10 @@ class Services:
             self.requirements,
             self.design,
             self.policies.security_checklist,
+        )
+
+    @cached_property
+    def backlog(self) -> BacklogService:
+        return BacklogService(
+            self.session, self.clock, self.audit, self.identity, self.artifacts, self.decisions, self.projects, self.requirements, self.design
         )

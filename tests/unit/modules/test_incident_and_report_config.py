@@ -16,6 +16,6 @@ def test_waiting_states_do_not_open_incidents_and_unknown_codes_use_the_default(
 
 
 def test_customers_see_the_summary_only_and_every_type_has_a_template() -> None:
-    assert {key for key, kind in CATALOG.report_types.items() if kind.customer_visible} == {"requirements_summary"}
+    assert {key for key, kind in CATALOG.report_types.items() if kind.customer_visible} == {"requirements_summary", "design_summary"}
     assert set(CATALOG.report_types) == set(TEMPLATE_FILES)
     assert len(template_version()) == 16

@@ -4,7 +4,8 @@
 # design_reviews: the current design has an approved security review and a feasibility review of that exact
 #   version, with no high-severity security gap and nothing rated not feasible (also checked when the design
 #   is approved). The review tasks close only once the design is approved, so a redraft cannot skip a review.
-# The implementation backlog, design change requests and Phase 8 reports arrive with Increment 4c.
+# backlog_current: an approved implementation backlog planning the current approved design version.
+# Design change requests arrive with Increment 4d.
 key: phase_08_solution_architecture_and_technical_design
 version: 1
 phase: 8
@@ -16,7 +17,7 @@ entry:
   requires_completed_phases: [7]
 exit:
   required_approvals: [design_baseline]
-  checks: [design_coverage, design_reviews]
+  checks: [design_coverage, design_reviews, backlog_current]
 tasks:
   - key: compare_options
     title: Compare solution options
@@ -37,3 +38,8 @@ tasks:
     agent: developer
     depends_on: [compare_options]
     required_approvals: [design_baseline]
+  - key: plan_backlog
+    title: Plan the implementation backlog
+    agent: developer
+    depends_on: [draft_design]
+    required_approvals: [implementation_backlog]

@@ -40,6 +40,10 @@ artifact_types:
     title: Feasibility review
     approver_roles: [reviewer, owner]
     independent_review: true
+  implementation_backlog:
+    title: Implementation backlog
+    approver_roles: [owner, project_manager, reviewer]  # Increment 4c; must plan the current approved design
+    independent_review: true
   implementation_report:
     title: Implementation report
     approver_roles: [reviewer, owner]

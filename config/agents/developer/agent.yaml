@@ -7,7 +7,7 @@ name: Developer Agent
 mission: >
   Give implementation feedback on the solution design before it is approved: whether each design item can be
   built as described with the chosen technology, how complex it is, and what concerns or unverified
-  capabilities need settling first.
+  capabilities need settling first. Once the design is approved, plan the implementation backlog from it.
 phases: [8]
 autonomy: supervised
 risk_class: low
@@ -25,4 +25,19 @@ tasks:
     context_reviews_of: [feasibility_review]
     prompt: prompts/review_feasibility.v1.md
     output_schema: schemas/review_feasibility.v1.json
+    max_attempts: 2
+
+  plan_backlog:
+    title: Plan the implementation backlog
+    description: >
+      Breaks the approved design into epics and work items, each implementing named design items and tracing to
+      requirements and acceptance criteria, with a size, dependencies and a delivery wave.
+    phase: 8
+    workflow_task: plan_backlog
+    phase_states: [in_progress, waiting_for_input]
+    input_artifact_types: [design_baseline]
+    input_must_be_approved: true
+    context_reviews_of: [implementation_backlog]
+    prompt: prompts/plan_backlog.v1.md
+    output_schema: schemas/plan_backlog.v1.json
     max_attempts: 2

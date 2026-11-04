@@ -1,0 +1,102 @@
+{# Design summary (Phase 8): status, the chosen option, the design, review outcomes as counts, the backlog, next actions.
+   Customer approvers may see this report, so it shows no review findings, only counts and sign-off status. #}
+{% extends "_base.html.j2" %}
+{% block content %}
+{% set d = data.design %}
+<section>
+  <h2>Status</h2>
+  <p>Phase {{ data.phase.number }}, {{ data.phase.name }}: <strong>{{ data.phase.state }}</strong>.</p>
+  <table>
+    <thead><tr><th>Task</th><th>Who</th><th>State</th></tr></thead>
+    <tbody>
+    {% for task in data.phase.tasks %}<tr><td>{{ task.title }}</td><td>{{ task.agent }}</td><td>{{ task.state }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Solution option</h2>
+  {% set o = data.option %}
+  {% if o %}
+  <p>Options compared: {{ o.options | join("; ") }}.</p>
+  <p>{% if o.chosen %}Chosen: <strong>{{ o.chosen }}</strong>.{% else %}<span class="missing">No option chosen yet ({{ o.status }}).</span>{% endif %}
+    {% if o.recommended %}The Solution Architect recommended {{ o.recommended }}: {{ o.rationale }}{% endif %}</p>
+  {% else %}<p class="missing">Solution options have not been compared yet.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Design</h2>
+  {% if d %}
+  <p>{{ d.title }} v{{ d.version_no }}: <strong>{{ d.approval_status | replace("_", " ") }}</strong>{% if d.approved %}, approved by {{ d.approved.by }} on {{ d.approved.at }} (content sha256 {{ d.approved.sha256[:12] }}){% endif %}.
+    Designed against requirements v{{ d.requirements_version_no }}.</p>
+  {% if d.stale_reason %}<p class="missing">{{ d.stale_reason }}.</p>{% endif %}
+  <p>{{ d.summary }}</p>
+  <ul>
+    <li>{{ d.item_count }} design items: {% for kind, count in d.kinds.items() %}{{ count }} {{ kind }}{% if not loop.last %}, {% endif %}{% endfor %}.</li>
+    <li>Coverage: {{ d.coverage.covered }} of {{ d.coverage.confirmed }} confirmed requirements covered; {{ d.coverage.excepted }} with a documented exception{% if d.coverage.gaps %}; not covered: {{ d.coverage.gaps | join(", ") }}{% endif %}.</li>
+    <li>Architecture decisions: {% for x in d.decisions %}{{ x.id }} {{ x.title }}{% if not loop.last %}; {% endif %}{% else %}none recorded{% endfor %}.</li>
+    <li>Technical risks: {% for x in d.risks %}{{ x.id }} {{ x.title }}{% if not loop.last %}; {% endif %}{% else %}none recorded{% endfor %}.</li>
+    <li>Open questions: {% for x in d.open_questions %}{{ x.id }} {{ x.title }}{% if not loop.last %}; {% endif %}{% else %}none{% endfor %}.</li>
+    <li>Items relying on capabilities still to verify: {{ d.unverified }}.</li>
+  </ul>
+  {% else %}<p class="missing">No design has been drafted yet.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Reviews</h2>
+  {% set s = data.security %}{% set f = data.feasibility %}
+  <ul>
+    {% if s %}
+    <li>{{ s.title }} v{{ s.version_no }} of design v{{ s.design_version_no }}{% if not s.current %} (not the current design){% endif %}:
+      {% for k, v in s.counts.items() %}{{ v }} {{ k }}{% if not loop.last %}, {% endif %}{% endfor %}; gaps by severity: {{ s.gaps.high }} high, {{ s.gaps.medium }} medium, {{ s.gaps.low }} low.
+      {% if s.signed_off %}Signed off by {{ s.signed_off.by }} on {{ s.signed_off.at }}.{% else %}<span class="missing">Not signed off.</span>{% endif %}</li>
+    {% else %}<li class="missing">No security review yet.</li>{% endif %}
+    {% if f %}
+    <li>{{ f.title }} v{{ f.version_no }} of design v{{ f.design_version_no }}{% if not f.current %} (not the current design){% endif %}:
+      {% for k, v in f.counts.items() %}{{ v }} {{ k }}{% if not loop.last %}, {% endif %}{% endfor %}; sizes: {{ f.sizes.S }} S, {{ f.sizes.M }} M, {{ f.sizes.L }} L.</li>
+    {% else %}<li class="missing">No feasibility review yet.</li>{% endif %}
+  </ul>
+  <p>{% if data.approvable %}Both reviews of the current design are in place; it can be approved.{% else %}The current design cannot be approved yet; see the next actions.{% endif %}</p>
+</section>
+
+<section>
+  <h2>Implementation backlog</h2>
+  {% set b = data.backlog %}
+  {% if b %}
+  <p>{{ b.title }} v{{ b.version_no }}, planning design v{{ b.design_version_no }}: <strong>{{ b.approval_status | replace("_", " ") }}</strong>{% if b.approved %}, approved by {{ b.approved.by }} on {{ b.approved.at }}{% endif %}.</p>
+  {% if b.stale_reason %}<p class="missing">{{ b.stale_reason }}.</p>{% endif %}
+  <p>{{ b.epics }} epic(s), {{ b.items }} work item(s): {{ b.estimates.S }} S, {{ b.estimates.M }} M, {{ b.estimates.L }} L, in {{ b.waves | length }} wave(s).</p>
+  {% else %}<p class="missing">No implementation backlog yet.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Decisions, blockers and incidents</h2>
+  <ul>
+    <li>Decisions waiting: {% for x in data.decisions_waiting %}{{ x.title }}{% if not loop.last %}; {% endif %}{% else %}none{% endfor %}.</li>
+    <li>Blocked or failed tasks: {% for t in data.blocked_tasks %}{{ t.title }} ({{ t.state }}){% if not loop.last %}; {% endif %}{% else %}none{% endfor %}.</li>
+    <li>Open incidents: {% for i in data.incidents %}{{ i.id }} {{ i.title }} ({{ i.severity }}, {{ i.status }}){% if not loop.last %}; {% endif %}{% else %}none{% endfor %}.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Recent milestones</h2>
+  {% if data.milestones %}
+  <ul>{% for m in data.milestones %}<li><span class="muted">{{ m.at }}</span> {{ m.what }}</li>{% endfor %}</ul>
+  {% else %}<p class="missing">No milestones recorded yet.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Next actions</h2>
+  {% if data.next_actions %}
+  <table>
+    <thead><tr><th>Action</th><th>Owner</th><th>Due</th></tr></thead>
+    <tbody>{% for a in data.next_actions %}<tr><td>{{ a.action }}</td><td>{{ a.owner }}</td><td{% if a.due == "No due date set" %} class="missing"{% endif %}>{{ a.due }}</td></tr>{% endfor %}</tbody>
+  </table>
+  {% else %}<p>No open actions.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Limitations</h2>
+  <ul>{% for l in data.limitations %}<li>{{ l }}</li>{% endfor %}</ul>
+</section>
+{% endblock %}

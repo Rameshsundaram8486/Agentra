@@ -11,7 +11,7 @@ enforced here, not by the agent:
   Phase 8 cannot complete otherwise (exit check design_coverage).
 - A design becomes stale when the approved requirements it was designed against are no longer the current
   approved requirements (for example after a change request). A stale design cannot be approved.
-- An approved design is under change control; changing it arrives with Increment 4c (design change requests).
+- An approved design is under change control; changing it arrives with Increment 4d (design change requests).
 - Approving a design version also needs its security and feasibility reviews (app/modules/design_reviews),
   checked through the approval hook wired in app/composition.py.
 """
@@ -118,7 +118,7 @@ class DesignService:
             return "The requirements are not approved at their current version; design builds on an approved requirements baseline"
         record = self._design_record(project_id)
         if record is not None and self._artifacts.is_locked_baseline(record.artifact_id) and not self._stale_reason(record.id):
-            return f"The solution design v{record.version_no} is approved and under change control; design change requests arrive in Increment 4c"
+            return f"The solution design v{record.version_no} is approved and under change control; design change requests arrive in Increment 4d"
         return None
 
     def current_version_id(self, project_id: uuid.UUID) -> uuid.UUID | None:

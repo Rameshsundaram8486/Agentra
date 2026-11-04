@@ -3,6 +3,7 @@
 from app.infrastructure import job_queue, outbox  # noqa: F401
 from app.modules.artifacts import models as artifacts_models  # noqa: F401
 from app.modules.audit import models as audit_models  # noqa: F401
+from app.modules.backlog import models as backlog_models  # noqa: F401
 from app.modules.decisions import models as decisions_models  # noqa: F401
 from app.modules.design import models as design_models  # noqa: F401
 from app.modules.design_reviews import models as design_reviews_models  # noqa: F401

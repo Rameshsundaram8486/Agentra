@@ -18,8 +18,11 @@ from sqlalchemy.orm import Session
 from app.infrastructure.clock import Clock
 from app.infrastructure.storage.base import ArtifactStore, ContentIntegrityError
 from app.modules.artifacts.service import ArtifactsService
+from app.modules.backlog.service import BACKLOG_TYPE, BacklogService
 from app.modules.audit.service import AuditService
 from app.modules.decisions.service import DecisionsService
+from app.modules.design.service import DESIGN_TYPE, DesignService
+from app.modules.design_reviews.service import REVIEW_TYPES, DesignReviewsService
 from app.modules.errors import ConflictError, IntegrityFailureError, NotFoundError, PermissionDeniedError, ValidationFailedError
 from app.modules.executions.service import ExecutionsService
 from app.modules.identity.service import Actor, IdentityService
@@ -27,7 +30,8 @@ from app.modules.oversight.service import OversightService
 from app.modules.projects.service import ProjectsService
 from app.modules.reporting import repository
 from app.modules.reporting.catalog import ReportCatalog
-from app.modules.reporting.generators import BUILDERS, ReportInputs, data_as_of, ts
+from app.modules.reporting import design_generators, generators
+from app.modules.reporting.generators import ReportInputs, data_as_of, ts
 from app.modules.reporting.models import Report
 from app.modules.reporting.rendering import render, template_version
 from app.modules.reporting.schemas import GenerateResult, ReportCreate, ReportTypeView, ReportView
@@ -37,6 +41,9 @@ from app.modules.workflow.service import WorkflowService
 __all__ = ["GenerateResult", "ReportCreate", "ReportView", "ReportingService"]
 
 INPUT_TYPES = ("project_brief", "source_document")
+# Documents a Phase 8 report tracks with their versions and approvals.
+PHASE_8_TYPES = (DESIGN_TYPE, *(artifact_type for artifact_type, _ in REVIEW_TYPES.values()), BACKLOG_TYPE)
+BUILDERS = {**generators.BUILDERS, **design_generators.BUILDERS}
 
 
 def _canonical(data: dict[str, Any]) -> bytes:
@@ -60,6 +67,9 @@ class ReportingService:
         requirements: RequirementsService,
         executions: ExecutionsService,
         oversight: OversightService,
+        design: DesignService,
+        design_reviews: DesignReviewsService,
+        backlog: BacklogService,
     ) -> None:
         self._session = session
         self._clock = clock
@@ -74,6 +84,9 @@ class ReportingService:
         self._requirements = requirements
         self._executions = executions
         self._oversight = oversight
+        self._design = design
+        self._design_reviews = design_reviews
+        self._backlog = backlog
 
     def report_types(self, actor: Actor, project_id: uuid.UUID) -> list[ReportTypeView]:
         self._identity.require_project(actor, project_id, "project.view")
@@ -189,9 +202,10 @@ class ReportingService:
         requirements = self._requirements.view(actor, project_id)
         baseline = details.get(requirements.artifact_id) if requirements else None
         tracked = [*documents, *([baseline] if baseline else []), *(d for d in details.values() if d.artifact_type == BASELINE_TYPE and d is not baseline)]
-        approvals = {d.id: self._decisions.artifact_approvals(actor, d.id) for d in tracked}
+        phase_documents = [d for d in details.values() if d.artifact_type in PHASE_8_TYPES] if phase_number == 8 else []
+        approvals = {d.id: self._decisions.artifact_approvals(actor, d.id) for d in [*tracked, *phase_documents]}
         runs = self._executions.list_runs(actor, project_id)
-        authors = {v.author_id for d in tracked for v in d.versions}
+        authors = {v.author_id for d in [*tracked, *phase_documents] for v in d.versions}
         task_histories = {t.id: self._workflow.history(actor, "task", t.id) for t in phase.tasks}
         phase_history = self._workflow.history(actor, "phase_run", phase.id)
         actors = {row.actor_id for rows in [phase_history, *task_histories.values()] for row in rows}
@@ -211,6 +225,10 @@ class ReportingService:
             runs=runs,
             incidents=self._oversight.list_incidents(actor, project_id),
             names=self._identity.display_names(authors | actors),
+            phase_documents=phase_documents,
+            design=self._design.view(actor, project_id) if phase_number == 8 else None,
+            reviews=self._design_reviews.view(actor, project_id) if phase_number == 8 else None,
+            backlog=self._backlog.view(actor, project_id) if phase_number == 8 else None,
         )
 
     @staticmethod
@@ -221,6 +239,10 @@ class ReportingService:
         if inputs.requirements:
             r = inputs.requirements
             sources.append(f"Requirements '{r.artifact_title}' v{r.version_no}: {len(r.items)} items (version {r.version_id})")
+        for d in inputs.phase_documents:
+            sources.append(f"{d.type_title} '{d.title}' v{d.current_version_no} (sha256 {d.current_version.content_sha256[:12]})")
+        if inputs.reviews and inputs.reviews.security and inputs.reviews.security.checklist:
+            sources.append(f"Security checklist: {inputs.reviews.security.checklist}")
         sources.append(f"Decisions: {len(inputs.decisions)}")
         sources.append(f"Change requests: {len(inputs.change_requests)}")
         sources.append(f"Agent runs: {len(inputs.runs)}")
