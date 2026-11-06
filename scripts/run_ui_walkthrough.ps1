@@ -25,6 +25,7 @@ if (-not $testUrl) { throw 'TEST_DATABASE_URL is not set in .env' }
 $env:DATABASE_URL = $testUrl
 $env:AGENTRA_ENV = 'test'
 $env:ARTIFACT_STORE_PATH = Join-Path $out 'store'
+$env:REPOSITORY_PATH = Join-Path $out 'repos'
 $env:PYTHONPATH = $root
 $server = $null
 try {
@@ -46,7 +47,7 @@ try {
     $result = $LASTEXITCODE
 } finally {
     if ($server) { taskkill /PID $server.Id /T /F | Out-Null }
-    Remove-Item Env:DATABASE_URL, Env:AGENTRA_ENV, Env:ARTIFACT_STORE_PATH, Env:PYTHONPATH -ErrorAction SilentlyContinue
+    Remove-Item Env:DATABASE_URL, Env:AGENTRA_ENV, Env:ARTIFACT_STORE_PATH, Env:REPOSITORY_PATH, Env:PYTHONPATH -ErrorAction SilentlyContinue
 }
 Write-Host "Screenshots: $out\screens"
 exit $result

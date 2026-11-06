@@ -1,0 +1,189 @@
+{
+  "$comment": "Output of developer.implement_work_item. Sent to the model as the structured output format; paths, sizes, protected files, tests and links are enforced in code (app/modules/implementation/rules.py, config/policies/change_sets.yaml).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "outcome",
+    "summary",
+    "files",
+    "test_command",
+    "design_items",
+    "requirements",
+    "acceptance_criteria",
+    "limitations",
+    "questions",
+    "review_responses"
+  ],
+  "properties": {
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "change_set",
+        "questions"
+      ],
+      "description": "change_set to implement the work item, questions when it cannot be implemented correctly without a decision."
+    },
+    "summary": {
+      "type": "string",
+      "description": "What the change does and how, or what is unclear."
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/file"
+      },
+      "description": "Files to add, modify or delete; empty for questions."
+    },
+    "test_command": {
+      "type": "string",
+      "description": "One command line run from the repository root that runs the tests; empty for questions."
+    },
+    "design_items": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Design item IDs of the work item that this change implements."
+    },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Requirement IDs of the work item that this change delivers."
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Acceptance criteria of the work item that this change meets, e.g. REQ-F-001.AC1."
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "What this change does not do yet, or assumptions for the reviewer to check."
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/question"
+      },
+      "description": "Questions for the team; empty for a change set."
+    },
+    "review_responses": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/review_response"
+      }
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "action",
+        "content"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative to the repository root, with forward slashes."
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "add",
+            "modify",
+            "delete"
+          ]
+        },
+        "content": {
+          "type": "string",
+          "description": "The complete new text of the file; empty for delete."
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "question",
+        "why_it_matters",
+        "suggested_answers",
+        "recommended_answer",
+        "recommendation_rationale"
+      ],
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "why_it_matters": {
+          "type": "string"
+        },
+        "suggested_answers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "title",
+              "description"
+            ],
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "recommended_answer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The key of the suggested answer you recommend, or null."
+        },
+        "recommendation_rationale": {
+          "type": "string"
+        }
+      }
+    },
+    "review_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ref",
+        "response"
+      ],
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "REV-n of the review comment answered."
+        },
+        "response": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

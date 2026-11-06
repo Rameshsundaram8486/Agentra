@@ -328,3 +328,38 @@ def test_solution_architect_applies_a_design_change_request_within_its_items(
     print(f"design v{design.version_no} ({design.change_request}): {len(design.items)} items; API-001 now: {api.description[:300]}")
     assert design.version_no == 2 and design.change_request == "CR-001: Scheduled reminders"
     assert run(lambda s: s.backlog.view(team.owner.actor, team.project.id)).stale
+
+
+def test_developer_writes_a_change_set_for_a_work_item(
+    phase9: Team, run: Callable[..., Any], test_settings: Settings, workspace: Any,
+    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore,
+) -> None:
+    """One real call: the Developer implements WI-002 (configure the security control SEC-001) on the fresh repository.
+    Nothing is run: the change set is only committed to its branch and checked in code."""
+    if test_settings.anthropic_api_key is None:
+        pytest.fail("ANTHROPIC_API_KEY is not set in .env")
+    live = AgentRunner(
+        session_factory, clock, policies, store, ModelGateway(policies.models, AnthropicProvider(test_settings.anthropic_api_key.get_secret_value())), workspace
+    )
+    team = phase9
+    backlog = run(lambda s: s.backlog.current_version_id(team.project.id))
+    data = AgentRunCreate(agent_key="developer", task_key="implement_work_item", artifact_version_id=backlog, subject="WI-002")
+    queued = run(lambda s: s.executions.request_run(team.pm.actor, team.project.id, data)).run
+    live.handle(ClaimedJob(uuid.uuid4(), "agent_run", {"agent_run_id": str(queued.id)}, "live", 1))
+    detail = run(lambda s: s.executions.get_run(team.owner.actor, queued.id))
+    call = detail.model_calls[0] if detail.model_calls else None
+    print(f"\nimplement_work_item: status={detail.status} cost=${detail.cost_usd} out_tokens={call.output_tokens if call else '-'} latency={call.latency_ms if call else '-'}ms")
+    for finding in detail.findings:
+        print(f"  finding: {finding.severity} {finding.check} {finding.path}: {finding.message}")
+    assert detail.status == "succeeded", f"{detail.error_code}: {detail.error_message}"
+
+    item = next(i for i in run(lambda s: s.implementation.view(team.owner.actor, team.project.id)).work_items if i.work_item_id == "WI-002")
+    if item.change_set is None:
+        print(f"asked {len(detail.decision_ids)} question(s) instead of writing code; task {item.task_state}")
+        assert item.task_state == "waiting_for_input"
+        return
+    change_set = item.change_set
+    print(f"change set v{change_set.version_no} on {change_set.branch}: {change_set.summary}\n  test command: {change_set.test_command}")
+    for f in change_set.files:
+        print(f"  {f.action} {f.path} ({f.bytes} bytes){' test' if f.test else ''}")
+    assert item.task_state == "waiting_for_review" and change_set.design_items == ["SEC-001"]

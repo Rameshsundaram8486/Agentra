@@ -60,8 +60,11 @@ class DecisionsService:
         artifacts: ArtifactsService,
         matrix: ApprovalMatrix,
         approval_checks: Mapping[str, Callable[[uuid.UUID], list[str]]] | None = None,
+        after_approval: Mapping[str, Callable[[uuid.UUID], None]] | None = None,
     ) -> None:
-        """approval_checks: artifact type -> problems with approving a given version (from other modules)."""
+        """approval_checks: artifact type -> problems with approving a given version (from other modules).
+        after_approval: artifact type -> what follows an approval of a version, in the same transaction (for example
+        queueing the merge of an approved change set)."""
         self._session = session
         self._clock = clock
         self._audit = audit
@@ -69,6 +72,7 @@ class DecisionsService:
         self._artifacts = artifacts
         self._matrix = matrix
         self._approval_checks = approval_checks or {}
+        self._after_approval = after_approval or {}
 
     # Approvals ------------------------------------------------------------------------------
 
@@ -119,6 +123,8 @@ class DecisionsService:
                 "content_sha256": content_sha256,
             },
         )
+        if data.decision == "approved" and (follow_up := self._after_approval.get(version.artifact_type)):
+            follow_up(version.id)
         return self._approval_views([approval], {version.id: version.version_no})[0]
 
     def artifact_approvals(self, actor: Actor, artifact_id: uuid.UUID) -> ArtifactApprovals:

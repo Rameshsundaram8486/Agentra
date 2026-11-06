@@ -1,14 +1,17 @@
-# Developer Agent: implementation feasibility in Phase 8; code, configuration and unit tests inside sandbox VMs
-# in Phase 9 (not built yet). Loaded by app/harness/registry.py; the code is in app/agents/developer/.
+# Developer Agent: implementation feasibility and the backlog in Phase 8; change sets (code, configuration and
+# unit tests) for each work item in Phase 9. It writes code but never runs it: each change set is built and tested
+# in a sandbox VM (Increment 5b) and approved by a reviewer before Agentra merges it.
+# Loaded by app/harness/registry.py; the code is in app/agents/developer/.
 # Model, effort and token limits are in config/models.yaml.
-version: 1
+version: 2
 key: developer
 name: Developer Agent
 mission: >
   Give implementation feedback on the solution design before it is approved: whether each design item can be
   built as described with the chosen technology, how complex it is, and what concerns or unverified
-  capabilities need settling first. Once the design is approved, plan the implementation backlog from it.
-phases: [8]
+  capabilities need settling first. Once the design is approved, plan the implementation backlog from it. In
+  Phase 9, implement one work item at a time as a small, reviewable change set with unit tests.
+phases: [8, 9]
 autonomy: supervised
 risk_class: low
 
@@ -40,4 +43,21 @@ tasks:
     context_reviews_of: [implementation_backlog]
     prompt: prompts/plan_backlog.v1.md
     output_schema: schemas/plan_backlog.v1.json
+    max_attempts: 2
+
+  implement_work_item:
+    title: Implement a work item
+    description: >
+      Writes the change set for one work item of the approved backlog: the files to add, change or delete on the
+      project's main branch, unit tests, the command that runs them, and links to the work item's design items,
+      requirements and acceptance criteria. Asks questions instead of guessing when the work item is unclear.
+    phase: 9
+    workflow_task: null  # works on the work item's own Phase 9 task (subject)
+    subject: work_item
+    phase_states: [in_progress]
+    input_artifact_types: [implementation_backlog]
+    input_must_be_approved: true
+    context_decisions_from: [implement_work_item]
+    prompt: prompts/implement_work_item.v1.md
+    output_schema: schemas/implement_work_item.v1.json
     max_attempts: 2

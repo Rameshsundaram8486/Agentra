@@ -1,7 +1,12 @@
 # Phase 9 - Development and Implementation: states, tasks, entry/exit gates, required approvals. Primary agent: developer.
-# Tasks are defined in Increment 6 (Phase 9 slice).
+# The phase has no fixed tasks: when it moves to in progress, Agentra adds one task per work item of the approved
+# implementation backlog (generated_tasks.source work_items), each depending on the tasks of the work items it
+# depends on. The Developer agent drafts a change set for a task (config/agents/developer/agent.yaml,
+# implement_work_item); a reviewer approves it only after a passing build and test run in a sandbox VM, then
+# Agentra merges it into the project's main branch and completes the task (completion_check change_set_merged).
+# The implementation report (the exit approval) and QA handover arrive with Increment 5c.
 key: phase_09_development_and_implementation
-version: 1
+version: 2
 phase: 9
 name: Development and Implementation
 primary_agent: developer
@@ -12,3 +17,8 @@ entry:
 exit:
   required_approvals: [implementation_report]
 tasks: []
+generated_tasks:
+  source: work_items
+  key_prefix: wi
+  agent: developer
+  completion_check: change_set_merged

@@ -18,6 +18,7 @@ class AgentRunCreate(BaseModel):
     task_key: str = Field(pattern=r"^[a-z][a-z0-9_]{1,63}$")
     artifact_version_id: uuid.UUID
     change_request_id: uuid.UUID | None = Field(default=None, description="For tasks that apply a change request")
+    subject: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9]{0,7}-\d{1,6}$", description="For tasks on one work item, e.g. WI-005")
 
 
 class FindingView(BaseModel):
@@ -59,6 +60,7 @@ class AgentRunView(BaseModel):
     agent_name: str
     task_key: str
     task_title: str
+    subject: str | None = None  # the work item a run works on
     status: RunStatus
     input_artifact_id: uuid.UUID
     input_artifact_version_id: uuid.UUID

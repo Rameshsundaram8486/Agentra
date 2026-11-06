@@ -4,8 +4,9 @@ from typing import Any
 import pytest
 
 from app.agents import task_implementation
-from app.composition import CONFIG_DIR, load_policies
+from app.composition import CONFIG_DIR, _check_cross_references, load_policies
 from app.harness.registry import AgentDefinitionError, load_registry
+from app.modules.workflow.definitions import WorkflowCatalog, WorkflowDefinitionError
 
 REGISTRY = load_registry(CONFIG_DIR / "agents")
 
@@ -14,7 +15,7 @@ def test_only_defined_agents_are_loaded_and_scaffolds_are_skipped() -> None:
     assert set(REGISTRY.agents) == {"business_analyst", "solution_architect", "security_reviewer", "developer"}
     assert {task for _, task in REGISTRY.tasks} == {
         "clarify_brief", "draft_requirements", "apply_change_request", "compare_options", "draft_design", "review_security", "review_feasibility", "plan_backlog",
-        "apply_design_change",
+        "apply_design_change", "implement_work_item",
     }
     task = REGISTRY.task("business_analyst", "clarify_brief")
     assert task is not None
@@ -27,6 +28,24 @@ def test_every_configured_task_has_code_and_policies_cross_check() -> None:
     for agent_key, task_key in REGISTRY.tasks:
         assert task_implementation(agent_key, task_key) is not None, f"{agent_key}.{task_key} has no implementation"
     load_policies()  # raises if a task names an unknown artifact type, phase or phase state
+
+
+def test_generated_tasks_and_tasks_on_one_subject_must_match_up() -> None:
+    policies = load_policies()
+    catalog, phase9 = policies.catalog, policies.catalog.phase(9)
+    assert phase9.generated_tasks is not None
+
+    def with_phase_9(**changes: Any) -> WorkflowCatalog:
+        return WorkflowCatalog(lifecycles=catalog.lifecycles, phases={**catalog.phases, 9: phase9.model_copy(update=changes)})
+
+    with pytest.raises(AgentDefinitionError, match="implement_work_item works on a work_item"):
+        _check_cross_references(with_phase_9(generated_tasks=None), policies.approvals, policies.agents)
+    unknown = phase9.generated_tasks.model_copy(update={"source": "everything"})
+    with pytest.raises(WorkflowDefinitionError, match="unknown source"):
+        _check_cross_references(with_phase_9(generated_tasks=unknown), policies.approvals, policies.agents)
+    nobody = phase9.generated_tasks.model_copy(update={"agent": "ghost"})
+    with pytest.raises(WorkflowDefinitionError, match="unknown agent 'ghost'"):
+        _check_cross_references(with_phase_9(generated_tasks=nobody), policies.approvals, policies.agents)
 
 
 def _resolve(schema: dict[str, Any], root: dict[str, Any]) -> dict[str, Any]:

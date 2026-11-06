@@ -1,4 +1,5 @@
-"""Picks queued agent runs and runs them through the harness. A separate process from the API:
+"""Picks queued agent runs and runs them through the harness, and Phase 9's sandbox runs and merges
+(app/workers/implementation_jobs.py). A separate process from the API:
 
     uv run python -m app.workers.workflow_worker          # keeps polling; Ctrl+C to stop
     uv run python -m app.workers.workflow_worker --once   # runs at most one job, then exits
@@ -15,7 +16,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import timedelta
 
-from app.composition import Policies, load_policies
+from app.composition import Policies, Workspace, load_policies
 from app.harness.runner import AgentRunner
 from app.infrastructure.clock import SystemClock
 from app.infrastructure.db import create_db_engine, make_session_factory
@@ -27,6 +28,8 @@ from app.model_gateway.gateway import ModelGateway
 from app.model_gateway.providers.anthropic_provider import AnthropicProvider
 from app.model_gateway.providers.base import Provider
 from app.modules.executions.service import AGENT_RUN_JOB
+from app.modules.implementation.service import MERGE_JOB, SANDBOX_RUN_JOB
+from app.workers.implementation_jobs import ImplementationJobs
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +45,7 @@ def build_runner(settings: Settings, policies: Policies, provider: Provider | No
         policies,
         LocalArtifactStore(settings.artifact_root),
         ModelGateway(policies.models, provider),
+        Workspace.default(settings.repository_root),
     )
 
 
@@ -60,7 +64,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         logger.warning("ANTHROPIC_API_KEY is not set: agent runs will fail with provider_not_configured")
     logger.info("worker started", extra={"worker_id": worker_id, "lease_seconds": runner.lease.total_seconds()})
 
-    handlers = {AGENT_RUN_JOB: runner.handle}
+    workspace = Workspace.default(settings.repository_root)
+    jobs = ImplementationJobs(runner.session_factory, runner.clock, policies, LocalArtifactStore(settings.artifact_root), workspace)
+    handlers = {AGENT_RUN_JOB: runner.handle, SANDBOX_RUN_JOB: jobs.handle_sandbox_run, MERGE_JOB: jobs.handle_merge}
     try:
         while True:
             worked = run_one_job(runner.session_factory, runner.clock, worker_id, handlers, runner.lease)

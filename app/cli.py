@@ -13,7 +13,7 @@ import getpass
 import sys
 from collections.abc import Callable, Sequence
 
-from app.composition import Services, load_policies
+from app.composition import Services, Workspace, load_policies
 from app.demo import seed_demo
 from app.infrastructure.clock import SystemClock
 from app.infrastructure.db import create_db_engine, make_session_factory
@@ -72,6 +72,7 @@ def main(
                 SystemClock(),
                 load_policies(min_password_length=settings.min_password_length),
                 LocalArtifactStore(settings.artifact_root),
+                Workspace.default(settings.repository_root),
             )
             if args.command == "create-user":
                 user = services.identity.create_user(

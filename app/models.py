@@ -9,6 +9,7 @@ from app.modules.design import models as design_models  # noqa: F401
 from app.modules.design_reviews import models as design_reviews_models  # noqa: F401
 from app.modules.executions import models as executions_models  # noqa: F401
 from app.modules.identity import models as identity_models  # noqa: F401
+from app.modules.implementation import models as implementation_models  # noqa: F401
 from app.modules.oversight import models as oversight_models  # noqa: F401
 from app.modules.projects import models as projects_models  # noqa: F401
 from app.modules.reporting import models as reporting_models  # noqa: F401

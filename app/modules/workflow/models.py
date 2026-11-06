@@ -36,6 +36,8 @@ class Task(Base):
     phase_run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("phase_runs.id"), index=True)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"), index=True)
     key: Mapped[str] = mapped_column(String(64))
+    # What a generated task works on (for example the work item WI-005); None for tasks from the phase definition.
+    subject: Mapped[str | None] = mapped_column(String(64))
     position: Mapped[int] = mapped_column(Integer)  # order in the phase definition
     title: Mapped[str] = mapped_column(String(200))
     agent: Mapped[str | None] = mapped_column(String(64))

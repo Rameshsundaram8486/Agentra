@@ -87,6 +87,19 @@ class TaskDefinition(BaseModel):
     requires_answered_questions: bool = False
 
 
+class GeneratedTasks(BaseModel):
+    """Tasks a phase gets from project data when it starts, one per subject (for example one per backlog work item).
+    The source and the completion check are named here and provided by other modules (app/composition.py)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str  # yields (subject, title, subjects it depends on)
+    key_prefix: str = Field(pattern=r"^[a-z][a-z0-9]{1,15}$")  # task key: <prefix>_<subject, lowercased>
+    agent: str
+    # Checked, with the task's subject, before a generated task can be completed.
+    completion_check: str
+
+
 class EntryRule(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -115,6 +128,7 @@ class PhaseDefinition(BaseModel):
     entry: EntryRule = EntryRule()
     exit: ExitRule = ExitRule()
     tasks: tuple[TaskDefinition, ...] = ()
+    generated_tasks: GeneratedTasks | None = None
 
     @model_validator(mode="after")
     def _tasks_form_a_dag(self) -> "PhaseDefinition":

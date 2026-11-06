@@ -35,6 +35,8 @@ class TaskSpec(_Strict):
     context_reviews_of: tuple[str, ...] = ()  # review comments (changes requested, rejected) on current versions
     context_findings_of: tuple[str, ...] = ()  # review documents (security, feasibility) whose open findings it must answer
     requires_change_request: bool = False  # the person asking names an approved change request to apply
+    # The person asking names one subject (a work item); the run works on that subject's generated phase task.
+    subject: Literal["work_item"] | None = None
     prompt: str
     output_schema: str
     max_attempts: int = Field(ge=1, le=5)

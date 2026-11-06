@@ -360,6 +360,32 @@ async function main() {
     await login("admin");
   });
 
+  await step("Phase 9: an untested change set cannot be approved, and the PM asks for the next work item", async () => {
+    await login("reviewer");
+    const url = `/app/control-center/project.html?id=${seed.implementation_project}`;
+    await goto(url, "document.querySelector('#implementation-items tr[data-work-item=WI-001] a') !== null", "implementation section");
+    const row = await text("#implementation-items tr[data-work-item=WI-001]");
+    for (const expected of ["Change set v1", "Build and tests: not run", "Sandbox VMs are not set up yet"]) {
+      if (!row.includes(expected)) throw new Error(`WI-001 row missing ${expected}: ${row}`);
+    }
+    if (!(await text("#implementation-summary")).includes("No sandbox VMs yet")) throw new Error("no-sandbox notice missing");
+    if (!(await text("#implementation-items tr[data-work-item=WI-003]")).includes("Waiting for WI-001")) throw new Error("WI-003 dependency not shown");
+    await click("#implementation-items tr[data-work-item=WI-001] details summary");
+    await waitFor("document.querySelector('#implementation-items tr[data-work-item=WI-001] pre').innerText.includes('deploy/environments.yaml')", "diff loaded");
+    await shot("11e-implementation");
+    await click("#implementation-items tr[data-work-item=WI-001] a");
+    await waitFor("location.pathname.endsWith('/artifact.html') && document.getElementById('viewing-label').innerText === 'Version 1' && document.querySelector('#review-panel [data-decision=approved]') !== null", "change set document");
+    await click("#review-panel [data-decision=approved]");
+    await waitFor("document.getElementById('review-message').innerText.includes('approved only after a passing run in a sandbox VM')", "approval refused");
+    await shot("11f-change-set-not-approvable");
+    await login("pm");
+    await goto(url, "document.querySelector('#implementation-items button[data-implement=WI-002]') !== null", "ask button for WI-002");
+    if (await evaluate("document.querySelector('#implementation-items button[data-implement=WI-003]') !== null")) throw new Error("WI-003 offered before WI-001 is done");
+    await click("#implementation-items button[data-implement=WI-002]");
+    await waitFor("document.getElementById('agent-runs').innerText.includes('Implement a work item (WI-002)')", "run for WI-002 queued");
+    await login("admin");
+  });
+
   await step("owner generates the design summary; it shows review counts but no findings", async () => {
     const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
     await goto(crUrl, "document.querySelector('#report-actions button[data-report=design_summary]') !== null", "design report button");

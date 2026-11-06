@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from alembic.config import Config
 
 from app.composition import Policies
+from app.harness.sandbox.provider import SandboxRequest, SandboxResult, SandboxUnavailable
 from app.infrastructure.settings import ROOT_DIR
 from app.modules.identity.service import Actor
 from app.modules.projects.service import ProjectView
@@ -27,6 +28,32 @@ def with_phase_tasks(policies: Policies, phase: int, tasks: Iterable[TaskDefinit
     definition = catalog.phase(phase).model_copy(update={"tasks": tuple(tasks)})
     updated = WorkflowCatalog(lifecycles=catalog.lifecycles, phases={**catalog.phases, phase: definition})
     return dataclasses.replace(policies, catalog=updated)
+
+
+class ScriptedSandbox:
+    """A sandbox provider for tests only: returns scripted results in order, and with nothing scripted behaves like
+    having no sandbox at all (the run is recorded as not run). Never part of the application."""
+
+    name = "scripted"
+
+    def __init__(self) -> None:
+        self.results: list[SandboxResult | Exception] = []
+        self.requests: list[SandboxRequest] = []
+
+    def passes(self, output: str = "3 passed in 0.4s") -> None:
+        self.results.append(SandboxResult("passed", 0, output, 1200, self.name, "test-image@1"))
+
+    def fails(self, exit_code: int = 1, output: str = "1 failed, 2 passed") -> None:
+        self.results.append(SandboxResult("failed", exit_code, output, 1300, self.name, "test-image@1"))
+
+    def run_checks(self, request: SandboxRequest) -> SandboxResult:
+        self.requests.append(request)
+        if not self.results:
+            raise SandboxUnavailable("No sandbox VM in this test")
+        result = self.results.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 
 @dataclass(frozen=True)

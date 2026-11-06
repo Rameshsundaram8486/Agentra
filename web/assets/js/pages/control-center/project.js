@@ -155,7 +155,7 @@ function runItem(run) {
     h(
       "div",
       {},
-      h("div", {}, `${run.agent_name}: ${run.task_title}`),
+      h("div", {}, `${run.agent_name}: ${run.task_title}${run.subject ? ` (${run.subject})` : ""}`),
       h("div", { class: "muted small" }, `Works from ${run.input_title} v${run.input_version_no}`),
       run.context_documents || run.context_decisions
         ? h("div", { class: "muted small" }, `Also read ${run.context_documents} other document(s) and ${run.context_decisions} decision(s)`)
@@ -168,6 +168,9 @@ function runItem(run) {
         : null,
       run.status === "succeeded" && run.task_key === "draft_requirements" ? h("div", { class: "small" }, "The draft is in Requirements below.") : null,
       run.status === "succeeded" && run.task_key === "draft_design" ? h("div", { class: "small" }, "The draft is in Solution design below.") : null,
+      run.status === "succeeded" && run.task_key === "implement_work_item" && !run.decision_ids.length
+        ? h("div", { class: "small" }, "The change set is in Implementation below.")
+        : null,
       run.error_message ? h("div", { class: "small" }, run.error_message) : null,
       blocking.length ? h("ul", { class: "bullets small" }, blocking.map((finding) => h("li", {}, finding.path ? `${finding.path}: ${finding.message}` : finding.message))) : null,
       warnings.length ? h("div", { class: "muted small" }, `Noted: ${warnings.map((finding) => finding.message).join("; ")}`) : null,
@@ -634,12 +637,175 @@ async function loadBacklog() {
   );
 }
 
+// Implementation (Phase 9) ----------------------------------------------------------------------
+
+const SANDBOX_WORDS = {
+  queued: "waiting for a sandbox VM",
+  running: "running in a sandbox VM",
+  passed: "passed in a sandbox VM",
+  failed: "failed",
+  not_run: "not run",
+  error: "could not complete",
+};
+
+function sandboxLine(changeSet) {
+  const latest = changeSet.sandbox_runs[0];
+  if (!latest) return h("div", { class: "sub" }, "Build and tests: no run yet.");
+  const detail = [
+    latest.exit_code !== null && latest.status !== "passed" ? `exit code ${latest.exit_code}` : null,
+    latest.image ? `on ${latest.image}` : null,
+    latest.error,
+  ].filter(Boolean);
+  return h(
+    "div",
+    { class: latest.status === "passed" ? "sub" : "sub small" },
+    `Build and tests: ${SANDBOX_WORDS[latest.status] ?? humanise(latest.status)}${detail.length ? ` (${detail.join("; ")})` : ""}.`,
+  );
+}
+
+function mergeLine(changeSet) {
+  const merge = changeSet.merge;
+  if (!merge) return null;
+  if (merge.status === "merged") return h("div", { class: "sub" }, `Merged into main (${merge.main_after.slice(0, 12)}).`);
+  return h("div", { class: "small" }, `Not merged: conflicts with main in ${merge.conflicts.join(", ")}. Ask the Developer again to redo it on the current main.`);
+}
+
+function diffDetails(changeSet) {
+  const pre = h("pre", { class: "content-view" }, "Loading...");
+  const details = h("details", { class: "small" }, h("summary", {}, `Diff (${changeSet.files.length} file(s), commit ${changeSet.commit.slice(0, 12)})`), pre);
+  details.addEventListener("toggle", async () => {
+    if (!details.open || details.dataset.loaded) return;
+    try {
+      const detail = await api(`/api/change-sets/${encodeURIComponent(changeSet.version_id)}`);
+      pre.textContent = detail.diff || "No changes.";
+      details.dataset.loaded = "yes";
+    } catch (failure) {
+      pre.textContent = failure.message;
+    }
+  });
+  return details;
+}
+
+async function implementationAction(call) {
+  const error = document.getElementById("implementation-error");
+  error.hidden = true;
+  try {
+    await call();
+    await Promise.all([loadImplementation(), loadAgentRuns(), loadPhases()]);
+  } catch (failure) {
+    error.textContent = failure.message;
+    error.hidden = false;
+  }
+}
+
+function implementationButtons(view, item) {
+  if (!canRunAgent) return h("span", { class: "muted small" }, "-");
+  const buttons = [];
+  if (item.ready && item.task_state !== "in_progress") {
+    const label = item.change_set ? "Ask the Developer again" : "Ask the Developer";
+    buttons.push(
+      h(
+        "button",
+        {
+          class: "button button-small button-secondary",
+          type: "button",
+          "data-implement": item.work_item_id,
+          onclick: () =>
+            implementationAction(() =>
+              api(`/api/projects/${encodeURIComponent(projectId)}/agent-runs`, {
+                method: "POST",
+                body: { agent_key: "developer", task_key: "implement_work_item", artifact_version_id: view.backlog_version_id, subject: item.work_item_id },
+              }),
+            ),
+        },
+        label,
+      ),
+    );
+  }
+  const latest = item.change_set?.sandbox_runs[0];
+  if (item.change_set && item.change_set.current && !item.change_set.merge && !(latest && ["queued", "running"].includes(latest.status))) {
+    buttons.push(
+      h(
+        "button",
+        {
+          class: "button button-small button-secondary",
+          type: "button",
+          onclick: () => implementationAction(() => api(`/api/change-sets/${encodeURIComponent(item.change_set.version_id)}/sandbox-runs`, { method: "POST" })),
+        },
+        "Build and test again",
+      ),
+    );
+  }
+  return buttons.length ? h("div", { class: "actions" }, buttons) : h("span", { class: "muted small" }, "-");
+}
+
+async function loadImplementation() {
+  const view = await api(`/api/projects/${encodeURIComponent(projectId)}/implementation`);
+  const section = document.getElementById("implementation-section");
+  section.hidden = !view.work_items.some((item) => item.task_id);
+  if (section.hidden) return;
+  const counts = Object.entries(view.counts).map(([state, count]) => `${count} ${humanise(state).toLowerCase()}`).join(", ");
+  document.getElementById("implementation-summary").replaceChildren(
+    ...[
+      h("p", {}, `Phase 9 is ${humanise(view.phase_state ?? "missing").toLowerCase()}. Work items: ${counts || "none"}.`),
+      h("p", { class: "muted small" }, view.main_commit ? `Project repository: main at ${view.main_commit.slice(0, 12)}. Implements backlog v${view.backlog_version_no}.` : "The project repository has not been created yet."),
+      view.sandbox_available
+        ? null
+        : h(
+            "div",
+            { class: "alert alert-info" },
+            "No sandbox VMs yet (they arrive with Increment 5b). The Developer can draft change sets and reviewers can request changes, but nothing is built or tested, so no change set can be approved or merged yet.",
+          ),
+    ].filter(Boolean),
+  );
+  const rows = view.work_items.map((item) => {
+    const changeSet = item.change_set;
+    return h(
+      "tr",
+      { "data-work-item": item.work_item_id },
+      h("td", { class: "num" }, item.work_item_id),
+      h(
+        "td",
+        {},
+        h("div", { class: "primary" }, item.title),
+        h("div", { class: "sub" }, `${humanise(item.work_type)}, size ${item.estimate}, wave ${item.wave}. Implements ${item.design_items.join(", ")}.`),
+        item.waiting_for.length ? h("div", { class: "sub small" }, `Waiting for ${item.waiting_for.join(", ")}.`) : null,
+      ),
+      h("td", {}, item.task_state ? statusBadge(item.task_state) : h("span", { class: "muted small" }, "No task")),
+      h(
+        "td",
+        {},
+        changeSet
+          ? h(
+              "div",
+              {},
+              h("div", {}, h("a", { class: "primary", href: `artifact.html?id=${encodeURIComponent(changeSet.artifact_id)}` }, `Change set v${changeSet.version_no}`), " ", statusBadge(changeSet.approval_status)),
+              h("div", { class: "sub" }, changeSet.summary),
+              sandboxLine(changeSet),
+              mergeLine(changeSet),
+              diffDetails(changeSet),
+            )
+          : h("span", { class: "muted small" }, "No change set yet."),
+      ),
+      h("td", {}, implementationButtons(view, item)),
+    );
+  });
+  document.getElementById("implementation-items").replaceChildren(
+    h(
+      "table",
+      { class: "table" },
+      h("thead", {}, h("tr", {}, h("th", {}, "ID"), h("th", {}, "Work item"), h("th", {}, "Task"), h("th", {}, "Change set"), h("th", {}, "Actions"))),
+      h("tbody", {}, rows),
+    ),
+  );
+}
+
 async function refreshAfterRun() {
   await Promise.all([
     loadPhases(),
     loadDecisionSummary(),
     canViewIncidents ? loadIncidents() : Promise.resolve(),
-    loadRequirements().then(() => Promise.all([loadTraceability(), loadDesign().then(loadChangeRequests), loadBacklog()]).then(fillInputs)),
+    loadRequirements().then(() => Promise.all([loadTraceability(), loadDesign().then(loadChangeRequests), loadBacklog(), loadImplementation()]).then(fillInputs)),
     loadDocuments().then((artifacts) => fillBriefs(artifacts)),
   ]);
 }
@@ -911,7 +1077,7 @@ startPage(async () => {
   if (can("artifact.view")) {
     await loadRequirements();
     enableChangeRequests();
-    await Promise.all([loadTraceability(), loadDesign().then(loadChangeRequests), loadBacklog()]);
+    await Promise.all([loadTraceability(), loadDesign().then(loadChangeRequests), loadBacklog(), loadImplementation()]);
   }
   if (can("agent_run.view")) {
     enableAgent(artifacts, can("agent.run"));

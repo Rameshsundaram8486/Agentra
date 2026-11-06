@@ -80,7 +80,8 @@ def test_the_design_pack_has_findings_escaped_and_the_gate(reviewed: Team, run: 
 
     assert data["gate"][0] == "Security review v1 of design v1 has high-severity gaps: SC-03"
     assert next(f for f in data["security_findings"] if f["ref"] == "SC-03")["severity"] == "high"
-    assert [r["task"] for r in data["agent_runs"]] == ["Compare solution options", "Draft the design", "Review the design's security"]
+    # Sorted: these runs share one instant of the fixed test clock, so the order between them is not defined.
+    assert sorted(r["task"] for r in data["agent_runs"]) == ["Compare solution options", "Draft the design", "Review the design's security"]
     assert "Nothing encrypts &lt;b&gt;leave&lt;/b&gt; data at rest." in html and "<b>leave</b>" not in html
     assert "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt; Leave app" in html and "<script>" not in html
     assert "Security review v1" in html and "Solution design v1" in html

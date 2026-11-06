@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.agents import task_implementation
 from app.agents.base import MissingInput
-from app.composition import Policies, Services
+from app.composition import Policies, Services, Workspace
 from app.guardrails.findings import Finding, blocking
 from app.guardrails.output.secret_scan import redact_secrets
 from app.guardrails.pipeline import check_output
@@ -65,12 +65,14 @@ class AgentRunner:
         policies: Policies,
         store: ArtifactStore,
         gateway: ModelGateway,
+        workspace: Workspace | None = None,
     ) -> None:
         self.session_factory = session_factory
         self.clock = clock
         self._policies = policies
         self._store = store
         self._gateway = gateway
+        self._workspace = workspace
 
     @property
     def lease(self) -> timedelta:
@@ -86,7 +88,7 @@ class AgentRunner:
     def _transaction(self) -> Iterator[Services]:
         """Commits if the block succeeds; rolls back otherwise."""
         with UnitOfWork(self.session_factory) as uow:
-            yield Services(uow.session, self.clock, self._policies, self._store)
+            yield Services(uow.session, self.clock, self._policies, self._store, self._workspace)
             uow.commit()
 
     def _finish(

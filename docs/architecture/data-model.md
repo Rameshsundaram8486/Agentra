@@ -42,7 +42,7 @@ erDiagram
 | `project_memberships` | identity | Roles per project | Roles: owner, project_manager, reviewer, customer_approver, agent. Agents may only hold `agent`; people may not hold `agent`. |
 | `projects` | projects | Delivery project | `code` is unique. |
 | `phase_runs` | workflow | One per project and phase (7-11) | `state` follows `config/workflows/lifecycles/standard_phase.yaml`. `version` is an optimistic lock. Records the definition key and version it was opened with. |
-| `tasks` | workflow | Work items inside a phase run | Copied from the phase definition when the project opens (`position`, `depends_on`), so later config edits do not rewrite history. |
+| `tasks` | workflow | Work items inside a phase run | Copied from the phase definition when the project opens (`position`, `depends_on`), so later config edits do not rewrite history. Phase 9 adds one generated task per backlog work item when it starts; its `subject` names the work item (WI-005). |
 | `state_transitions` | workflow | Every phase or task state change | Actor, reason, from and to state, timestamp, and a `seq` that orders changes made in the same instant. Written in the same transaction as the change. |
 | `audit_events` | audit | Append-only, hash-chained trail | `hash = sha256(prev_hash + event fields)`. A database trigger refuses UPDATE, DELETE and TRUNCATE. Writers take an advisory lock so the chain never forks. |
 | `artifacts` | artifacts | A document of a type from `approval_matrix.yaml` | `(project, type, title)` is unique. `current_version_no` moves only by compare-and-set. |
@@ -68,6 +68,10 @@ erDiagram
 | `backlog_versions` | backlog | One planned backlog, tied to one implementation_backlog document version and the approved design version it plans | Summary, epics, responses to review comments. **Append-only**. |
 | `backlog_items` | backlog | Each work item | Work item ID (WI-001 ...), epic, work type, design items it implements, requirements (stated plus those of its design items), acceptance-criterion refs, size, dependencies, wave. **Append-only**. |
 | `backlog_ids` | backlog | The epic and work item IDs a project has issued | Never reused. **Append-only**. |
+| `project_repositories` | implementation | The project's git repository, created when Phase 9 starts | Its first commit on main. The repository itself is a bare git repository under `var/repos` (`REPOSITORY_PATH`), named by project id. **Append-only**. |
+| `change_sets` | implementation | One change set, tied to one change_set document version (Change set WI-005) and the approved backlog version it implements | Work item, the main it was based on, its commit and branch (`wi/WI-005/v2`), summary, files (path, action, size, sha256, whether a test), linked design items, requirements and acceptance criteria, test command, limitations, responses to review comments. **Append-only**. |
+| `sandbox_runs` | implementation | One build and test run of one change set version | `queued`, `running`, then `passed`, `failed`, `not_run` (no sandbox could run it) or `error`; provider, VM image, exit code, a redacted excerpt and the sha256 of the full output, duration, who asked. Status changes as it runs. |
+| `change_set_merges` | implementation | What happened when an approved change set version was merged into main | `merged` (main before and after) or `conflict` (the files; main unchanged). One per version. **Append-only**. |
 | `jobs` | infrastructure | Background job queue | One job per `idempotency_key`. Claimed with `FOR UPDATE SKIP LOCKED` under a lease; reclaimed when the lease expires; `dead` after `max_attempts`. |
 | `outbox_messages` | infrastructure | External side effects | Written in the same transaction as the change that causes them. Delivered at least once, and handlers receive the idempotency key. |
 

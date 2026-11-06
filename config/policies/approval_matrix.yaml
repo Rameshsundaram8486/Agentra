@@ -45,6 +45,10 @@ artifact_types:
     title: Implementation backlog
     approver_roles: [owner, project_manager, reviewer]  # Increment 4c; must plan the current approved design
     independent_review: true
+  change_set:
+    title: Change set
+    approver_roles: [reviewer]  # code review (Increment 5a); only after a passing sandbox run of the exact version
+    independent_review: true
   implementation_report:
     title: Implementation report
     approver_roles: [reviewer, owner]

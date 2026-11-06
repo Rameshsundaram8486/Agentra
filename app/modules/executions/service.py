@@ -10,6 +10,7 @@ methods; people only request and read.
 import hashlib
 import json
 import uuid
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
@@ -78,7 +79,12 @@ class ExecutionsService:
         decisions: DecisionsService,
         oversight: OversightService,
         registry: AgentRegistry,
+        subject_context: Mapping[str, Callable[[uuid.UUID, str], dict[str, Any]]] | None = None,
     ) -> None:
+        """subject_context[kind](project_id, subject): what a run on one subject works from besides its input (review
+        comment IDs under "reviews", and whatever else should make asking again start a new run). Raises a
+        DomainError for an unknown subject. From the module that owns the subject (app/composition.py)."""
+        self._subject_context = subject_context or {}
         self._session = session
         self._clock = clock
         self._audit = audit
@@ -111,19 +117,31 @@ class ExecutionsService:
             raise ValidationFailedError(
                 "Name the change request to apply" if task.spec.requires_change_request else "This task does not apply a change request"
             )
+        if (task.spec.subject is not None) != (data.subject is not None):
+            raise ValidationFailedError("Name the work item to work on" if task.spec.subject else "This task does not work on one work item")
         workflow_task = None
-        if task.spec.workflow_task is not None:
+        if task.spec.subject is not None:
+            assert data.subject is not None
+            subject_context = self._subject_context[task.spec.subject](project_id, data.subject)
+            workflow_task = self._workflow.task_by_subject(project_id, task.spec.phase, data.subject)
+            if workflow_task is None:
+                raise ValidationFailedError(f"Phase {task.spec.phase} has no task for {data.subject} yet; it is added when the phase starts")
+        elif task.spec.workflow_task is not None:
             workflow_task = self._workflow.task_by_key(project_id, task.spec.phase, task.spec.workflow_task)
             if workflow_task is None:
                 raise ValidationFailedError(f"This project has no '{task.spec.workflow_task}' task in Phase {task.spec.phase}")
-            if workflow_task.state not in _START_PATHS and not self._new_input_for_closed_task(workflow_task, record.id):
-                raise InvalidTransitionError(f"The '{workflow_task.title}' task is {workflow_task.state.replace('_', ' ')}")
+        if workflow_task is not None and workflow_task.state not in _START_PATHS and not self._new_input_for_closed_task(workflow_task, record.id):
+            raise InvalidTransitionError(f"The '{workflow_task.title}' task is {workflow_task.state.replace('_', ' ')}")
 
         context = self._context_snapshot(actor, project_id, task)
         if data.change_request_id is not None:
             context["change_request"] = str(data.change_request_id)
+        if data.subject is not None:
+            context = {**context, **subject_context, "subject": data.subject}
         fingerprint = hashlib.sha256(json.dumps({"input": str(record.id), **context}, sort_keys=True).encode()).hexdigest()[:16]
         earlier = repository.runs_for_input(self._session, task.agent_key, task.key, record.id)
+        if data.subject is not None:
+            earlier = [r for r in earlier if (r.input_refs or {}).get("subject") == data.subject]
         same = next((r for r in reversed(earlier) if r.status in _ACTIVE and r.input_refs.get("fingerprint") == fingerprint), None)
         if same is not None:
             return RunRequestResult(run=self._views([same])[0], created=False)
@@ -147,7 +165,7 @@ class ExecutionsService:
             input_artifact_version_id=record.id,
             input_refs={**context, "fingerprint": fingerprint},
             task_id=workflow_task.id if workflow_task else None,
-            idempotency_key=f"{task.agent_key}.{task.key}:{record.id}:{fingerprint}:{len(earlier) + 1}",
+            idempotency_key=f"{task.agent_key}.{task.key}:{record.id}:{data.subject or '-'}:{fingerprint}:{len(earlier) + 1}",
             status="queued",
             attempts=0,
             max_attempts=task.spec.max_attempts,
@@ -162,7 +180,11 @@ class ExecutionsService:
                 repository.add(self._session, run)
         except IntegrityError:
             # Someone asked for the same thing at the same moment; theirs won.
-            winner = next(r for r in repository.runs_for_input(self._session, task.agent_key, task.key, record.id) if r.status in _ACTIVE)
+            winner = next(
+                r
+                for r in repository.runs_for_input(self._session, task.agent_key, task.key, record.id)
+                if r.status in _ACTIVE and (r.input_refs or {}).get("subject") == data.subject
+            )
             return RunRequestResult(run=self._views([winner])[0], created=False)
         if workflow_task is not None and workflow_task.state in _START_PATHS:
             # Why Agentra may send a task waiting for review back itself: comments or findings to answer, or a new
@@ -544,6 +566,7 @@ class ExecutionsService:
                     agent_name=task.agent_name if task else run.agent_key,
                     task_key=run.task_key,
                     task_title=task.spec.title if task else run.task_key,
+                    subject=refs.get("subject"),
                     status=run.status,  # type: ignore[arg-type]
                     input_artifact_id=record.artifact_id,
                     input_artifact_version_id=record.id,

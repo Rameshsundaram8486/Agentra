@@ -16,6 +16,7 @@ class TaskView(BaseModel):
     id: uuid.UUID
     phase_run_id: uuid.UUID
     key: str
+    subject: str | None = None  # set on generated tasks, e.g. the work item WI-005
     title: str
     agent: str | None
     depends_on: list[str]
@@ -23,6 +24,14 @@ class TaskView(BaseModel):
     version: int
     updated_at: datetime
     available_transitions: list[str]
+
+
+class GeneratedTask(BaseModel):
+    """One task a source yields for a phase: its subject, its title and the subjects it depends on."""
+
+    subject: str = Field(pattern=r"^[A-Z][A-Z0-9]{0,7}-\d{1,6}$")
+    title: str = Field(min_length=1, max_length=200)
+    depends_on: list[str] = []
 
 
 class PhaseRunView(BaseModel):

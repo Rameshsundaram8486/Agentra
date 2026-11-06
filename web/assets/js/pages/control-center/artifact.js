@@ -173,12 +173,13 @@ function enableNewVersion() {
 
 startPage(async () => {
   if (!artifactId) throw new Error("No document selected");
+  // Before the panel is shown, so a quick click is never lost; the handlers read the shown version when clicked.
+  wireReview();
+  wireCompare();
   await reload();
   const detail = await api(`/api/projects/${encodeURIComponent(page.artifact.project_id)}`);
   const link = document.getElementById("project-link");
   link.textContent = detail.project.name;
   link.href = `project.html?id=${encodeURIComponent(detail.project.id)}`;
-  wireReview();
-  wireCompare();
   if (detail.my_permissions.includes("artifact.author")) enableNewVersion();
 });

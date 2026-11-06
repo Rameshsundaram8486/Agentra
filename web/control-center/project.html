@@ -152,6 +152,16 @@
           <div class="card card-flush" id="backlog-items"></div>
         </section>
 
+        <section class="section" id="implementation-section" hidden>
+          <div class="section-header">
+            <h2>Implementation</h2>
+            <span class="muted small">Agentra builds and tests each change set in a sandbox VM; a reviewer approves it, then Agentra merges it into main.</span>
+          </div>
+          <div class="card" id="implementation-summary"></div>
+          <div id="implementation-error" class="alert alert-error" role="alert" hidden></div>
+          <div class="card card-flush" id="implementation-items"></div>
+        </section>
+
         <section class="section" id="change-section" hidden>
           <div class="section-header">
             <h2>Change requests</h2>
@@ -219,7 +229,8 @@
                 source documents and your answers. Phase 8: once the requirements are approved, the Solution Architect
                 compares solution options for you to choose from, then drafts the design on the chosen option; the
                 Security Reviewer and the Developer then review that design version before it can be approved, and the
-                Developer plans the implementation backlog from the approved design.
+                Developer plans the implementation backlog from the approved design. Phase 9: ask the Developer to
+                implement a work item from the Implementation section.
                 Agents recommend; people decide. Each run is a paid model call.
               </p>
               <div class="field">

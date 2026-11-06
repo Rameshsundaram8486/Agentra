@@ -18,13 +18,14 @@ from app.api.routers import (
     design,
     executions,
     health,
+    implementation,
     oversight,
     projects,
     reports,
     requirements,
     workflow,
 )
-from app.composition import Policies, load_policies
+from app.composition import Policies, Workspace, load_policies
 from app.infrastructure.clock import Clock, SystemClock
 from app.infrastructure.db import create_db_engine, make_session_factory
 from app.infrastructure.logging import configure_logging
@@ -57,6 +58,7 @@ def create_app(
     clock: Clock | None = None,
     policies: Policies | None = None,
     store: ArtifactStore | None = None,
+    workspace: Workspace | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level, settings.secret_values())
@@ -83,6 +85,7 @@ def create_app(
     app.state.clock = clock or SystemClock()
     app.state.policies = policies
     app.state.store = store or LocalArtifactStore(settings.artifact_root)
+    app.state.workspace = workspace or Workspace.default(settings.repository_root)
 
     register_error_handlers(app)
     app.middleware("http")(_security_headers)
@@ -96,6 +99,7 @@ def create_app(
         executions.router,
         requirements.router,
         design.router,
+        implementation.router,
         reports.router,
         oversight.router,
         audit.router,

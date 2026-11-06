@@ -11,10 +11,11 @@ from pathlib import Path
 from typing import Any
 
 from app.cli import main
-from app.composition import Services, load_policies
+from app.composition import Services, Workspace, load_policies
 from app.harness.runner import AgentRunner
 from app.infrastructure.clock import SystemClock
 from app.infrastructure.db import create_db_engine, make_session_factory
+from app.infrastructure.job_queue import ClaimedJob
 from app.infrastructure.settings import get_settings
 from app.infrastructure.storage.local import LocalArtifactStore
 from app.infrastructure.unit_of_work import UnitOfWork
@@ -27,9 +28,10 @@ from app.modules.identity.service import Actor
 from app.modules.projects.service import ProjectCreate
 from app.modules.requirements.service import ChangeRequestCreate
 from app.modules.workflow.service import TransitionRequest
+from app.workers.implementation_jobs import ImplementationJobs
 from tests.agent_support import (
-    BRIEF, DISCOVERY_NOTES, ba_json, backlog_json, compare_output, design_json, draft_items, draft_json, feasibility_json, kept_design_items, process,
-    security_findings, security_json,
+    BRIEF, DISCOVERY_NOTES, ba_json, backlog_json, change_set_json, compare_output, design_json, draft_items, draft_json, feasibility_json,
+    kept_design_items, process, security_findings, security_json,
 )
 from tests.support import make_docx
 
@@ -58,18 +60,21 @@ docx_path = Path(sys.argv[1]).with_name("discovery-notes.docx")
 docx_path.write_bytes(make_docx("Discovery notes", "Leave approvals happen weekly."))
 
 
-def change_control_project() -> str:
+def change_control_project(*, to_phase_9: bool = False) -> str:
     """Brief clarified; a failed draft (INC-001) then a good one, approved; CR-001 raised and still open; Phase 7
     completed; Phase 8 options compared and chosen; design v1 with a high security gap (SC-03), redrafted as v2
-    answering it, reviewed again, signed off and approved; the implementation backlog planned and approved."""
+    answering it, reviewed again, signed off and approved; the implementation backlog planned and approved.
+    to_phase_9: then Phase 8 completed, Phase 9 started, and the Developer's change set for WI-001 drafted; its
+    sandbox run is processed with no sandbox VM, so it is not run (as in development until Increment 5b)."""
     settings = get_settings()
     policies = load_policies(min_password_length=settings.min_password_length)
     engine = create_db_engine(settings.database_url.get_secret_value())
     factory, clock, store = make_session_factory(engine), SystemClock(), LocalArtifactStore(settings.artifact_root)
+    workspace = Workspace.default(settings.repository_root)
 
     def run(fn: Any) -> Any:
         with UnitOfWork(factory) as uow:
-            result = fn(Services(uow.session, clock, policies, store))
+            result = fn(Services(uow.session, clock, policies, store, workspace))
             uow.commit()
             return result
 
@@ -77,7 +82,8 @@ def change_control_project() -> str:
         return run(lambda s: s.identity.actor_by_email(users[key][0]))
 
     admin, pm, reviewer = actor("admin"), actor("pm"), actor("reviewer")
-    project = run(lambda s: s.projects.create_project(admin, ProjectCreate(code=f"CR-{suffix.upper()}", name="UI Change control", customer_name="Example Co")))
+    code, name = (f"IM-{suffix.upper()}", "UI Implementation") if to_phase_9 else (f"CR-{suffix.upper()}", "UI Change control")
+    project = run(lambda s: s.projects.create_project(admin, ProjectCreate(code=code, name=name, customer_name="Example Co")))
     for key, role in (("pm", "project_manager"), ("reviewer", "reviewer"), ("customer", "customer_approver")):
         run(lambda s, k=key, r=role: s.identity.add_member(admin, project.id, users[k][0], r))
     run(lambda s: s.identity.add_member(admin, project.id, AGENT_EMAIL, "agent"))
@@ -99,7 +105,7 @@ def change_control_project() -> str:
     run(lambda s: s.artifacts.create_artifact(pm, project.id, ArtifactCreate(artifact_type="source_document", title="Discovery notes", content=DISCOVERY_NOTES)))
 
     model = FakeProvider([fake_response(ba_json())])
-    runner = AgentRunner(factory, clock, policies, store, ModelGateway(policies.models, model))
+    runner = AgentRunner(factory, clock, policies, store, ModelGateway(policies.models, model), workspace)
 
     def ask_agent(task_key: str) -> None:
         data = AgentRunCreate(agent_key="business_analyst", task_key=task_key, artifact_version_id=brief.id)
@@ -183,11 +189,30 @@ def change_control_project() -> str:
     # The backlog planned from design v2, approved by the PM.
     ask_agent("developer", "plan_backlog", backlog_json())
     approve(pm, run(lambda s: s.backlog.view(admin, project.id)).version_id)
+    if to_phase_9:
+        for key in ("review_security", "review_feasibility", "plan_backlog"):
+            move8(reviewer, "task", key, "completed")
+        move8(pm, "phase", 8, "waiting_for_review")
+        move8(reviewer, "phase", 8, "completed")
+        for who, state in ((admin, "ready"), (pm, "in_progress")):
+            def start(s: Services, who: Actor = who, state: str = state) -> None:
+                phase = next(p for p in s.workflow.list_phase_runs(admin, project.id) if p.phase == 9)
+                s.workflow.transition_phase_run(who, phase.id, TransitionRequest(to_state=state, reason="UI seed", expected_version=phase.version))
+
+            run(start)
+        model.add(fake_response(change_set_json()))
+        backlog = run(lambda s: s.backlog.current_version_id(project.id))
+        data = AgentRunCreate(agent_key="developer", task_key="implement_work_item", artifact_version_id=backlog, subject="WI-001")
+        process(runner, run(lambda s: s.executions.request_run(pm, project.id, data)).run.id)
+        work_item = next(i for i in run(lambda s: s.implementation.view(admin, project.id)).work_items if i.work_item_id == "WI-001")
+        jobs = ImplementationJobs(factory, clock, policies, store, workspace)
+        jobs.handle_sandbox_run(ClaimedJob(uuid.uuid4(), "sandbox_run", {"sandbox_run_id": str(work_item.change_set.sandbox_runs[0].id)}, "seed", 1))
     engine.dispose()
     return str(project.id)
 
 
 change_project_id = change_control_project()
+implementation_project_id = change_control_project(to_phase_9=True)
 
 with open(sys.argv[1], "w", encoding="utf-8") as handle:
     json.dump(
@@ -198,6 +223,7 @@ with open(sys.argv[1], "w", encoding="utf-8") as handle:
             "agent": AGENT_EMAIL,
             "docx": str(docx_path),
             "change_project": change_project_id,
+            "implementation_project": implementation_project_id,
         },
         handle,
     )

@@ -3,10 +3,12 @@
 from dataclasses import dataclass
 from datetime import timedelta
 from functools import cached_property
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.harness.registry import AgentDefinitionError, AgentRegistry, load_registry, task_refs
+from app.harness.sandbox.provider import SandboxProvider, UnavailableSandbox
 from app.infrastructure.clock import Clock
 from app.infrastructure.settings import ROOT_DIR
 from app.infrastructure.storage.base import ArtifactStore
@@ -22,6 +24,9 @@ from app.modules.design_reviews.service import DesignReviewsService
 from app.modules.executions.service import ExecutionsService
 from app.modules.identity.authz import PermissionPolicy, load_permission_policy
 from app.modules.identity.service import IdentityService
+from app.modules.implementation.git_repo import GitRepositories
+from app.modules.implementation.policy import ChangeSetPolicy, load_change_set_policy
+from app.modules.implementation.service import CHANGE_SET_TYPE, ImplementationService
 from app.modules.oversight.rules import IncidentRules, load_incident_rules
 from app.modules.oversight.service import OversightService
 from app.modules.projects.service import ProjectsService
@@ -33,6 +38,9 @@ from app.modules.workflow.service import WorkflowService
 
 CONFIG_DIR = ROOT_DIR / "config"
 EXIT_CHECKS = frozenset({"design_coverage", "design_reviews", "backlog_current"})  # named phase exit checks wired in Services.workflow
+TASK_SOURCES = frozenset({"work_items"})  # named sources of generated phase tasks wired in Services.workflow
+TASK_CHECKS = frozenset({"change_set_merged"})  # named completion checks of generated tasks wired in Services.workflow
+SUBJECT_KINDS = {"work_item": "work_items"}  # what an agent task's subject is -> the task source whose tasks it works on
 
 
 @dataclass(frozen=True)
@@ -47,8 +55,22 @@ class Policies:
     incidents: IncidentRules
     reports: ReportCatalog
     security_checklist: SecurityChecklist
+    change_sets: ChangeSetPolicy
     session_ttl: timedelta = timedelta(hours=12)
     min_password_length: int = 12
+
+
+@dataclass(frozen=True)
+class Workspace:
+    """Where project code lives and where it is built: Agentra's git repositories and the sandbox VM provider."""
+
+    repos: GitRepositories
+    sandbox: SandboxProvider
+
+    @classmethod
+    def default(cls, repository_root: Path = ROOT_DIR / "var" / "repos") -> "Workspace":
+        """No sandbox VMs yet (Increment 5b), so nothing is built or tested."""
+        return cls(GitRepositories(repository_root), UnavailableSandbox())
 
 
 def _check_cross_references(catalog: WorkflowCatalog, approvals: ApprovalMatrix, agents: AgentRegistry) -> None:
@@ -56,6 +78,11 @@ def _check_cross_references(catalog: WorkflowCatalog, approvals: ApprovalMatrix,
         unknown_checks = set(phase.exit.checks) - EXIT_CHECKS
         if unknown_checks:
             raise WorkflowDefinitionError(f"phase {number} names unknown exit checks {sorted(unknown_checks)}")
+        if (generated := phase.generated_tasks) is not None:
+            if generated.source not in TASK_SOURCES or generated.completion_check not in TASK_CHECKS:
+                raise WorkflowDefinitionError(f"phase {number} generates tasks from an unknown source or with an unknown completion check")
+            if generated.agent not in agents.agents:
+                raise WorkflowDefinitionError(f"phase {number} assigns generated tasks to unknown agent '{generated.agent}'")
         required = set(phase.exit.required_approvals).union(*(task.required_approvals for task in phase.tasks))
         unknown = required - set(approvals.artifact_types)
         if unknown:
@@ -72,6 +99,10 @@ def _check_cross_references(catalog: WorkflowCatalog, approvals: ApprovalMatrix,
         workflow_task = next((t for t in catalog.phase(task.spec.phase).tasks if t.key == task.spec.workflow_task), None)
         if task.spec.workflow_task is not None and (workflow_task is None or workflow_task.agent != agent_key):
             raise AgentDefinitionError(f"{name} names workflow task '{task.spec.workflow_task}', which phase {task.spec.phase} does not assign to {agent_key}")
+        if task.spec.subject is not None:
+            generated = catalog.phase(task.spec.phase).generated_tasks
+            if task.spec.workflow_task is not None or generated is None or generated.source != SUBJECT_KINDS[task.spec.subject] or generated.agent != agent_key:
+                raise AgentDefinitionError(f"{name} works on a {task.spec.subject}, but phase {task.spec.phase} does not generate {task.spec.subject} tasks for {agent_key}")
         unknown = set(task.spec.context_artifact_types + task.spec.context_reviews_of + task.spec.context_findings_of) - set(approvals.artifact_types)
         if unknown:
             raise AgentDefinitionError(f"{name} reads unknown context artifact types {sorted(unknown)}")
@@ -98,17 +129,19 @@ def load_policies(session_ttl: timedelta = timedelta(hours=12), min_password_len
         incidents=load_incident_rules(CONFIG_DIR / "policies" / "incident_rules.yaml"),
         reports=load_report_catalog(CONFIG_DIR / "policies" / "report_visibility.yaml"),
         security_checklist=load_security_checklist(CONFIG_DIR / "policies" / "security_checklist.yaml"),
+        change_sets=load_change_set_policy(CONFIG_DIR / "policies" / "change_sets.yaml"),
         session_ttl=session_ttl,
         min_password_length=min_password_length,
     )
 
 
 class Services:
-    def __init__(self, session: Session, clock: Clock, policies: Policies, store: ArtifactStore) -> None:
+    def __init__(self, session: Session, clock: Clock, policies: Policies, store: ArtifactStore, workspace: Workspace | None = None) -> None:
         self.session = session
         self.clock = clock
         self.policies = policies
         self.store = store
+        self.workspace = workspace or Workspace.default()
 
     @cached_property
     def audit(self) -> AuditService:
@@ -154,7 +187,9 @@ class Services:
                 DESIGN_TYPE: lambda version_id: self.design.approval_problems(version_id) + self.design_reviews.design_problems(version_id),
                 "security_review": lambda version_id: self.design_reviews.security_approval_problems(version_id),
                 BACKLOG_TYPE: lambda version_id: self.backlog.approval_problems(version_id),
+                CHANGE_SET_TYPE: lambda version_id: self.implementation.approval_problems(version_id),
             },
+            after_approval={CHANGE_SET_TYPE: lambda version_id: self.implementation.on_approved(version_id)},
         )
 
     @cached_property
@@ -173,6 +208,8 @@ class Services:
                 "design_reviews": lambda project_id: self.design_reviews.gate_failures(project_id),
                 "backlog_current": lambda project_id: self.backlog.gate_failures(project_id),
             },
+            task_sources={"work_items": lambda project_id: self.implementation.generated_tasks(project_id)},
+            task_checks={"change_set_merged": lambda project_id, subject: self.implementation.task_completion_problems(project_id, subject)},
         )
 
     @cached_property
@@ -191,6 +228,7 @@ class Services:
             self.decisions,
             self.oversight,
             self.policies.agents,
+            subject_context={"work_item": lambda project_id, subject: self.implementation.run_context(project_id, subject)},
         )
 
     @cached_property
@@ -260,4 +298,21 @@ class Services:
     def backlog(self) -> BacklogService:
         return BacklogService(
             self.session, self.clock, self.audit, self.identity, self.artifacts, self.decisions, self.projects, self.requirements, self.design
+        )
+
+    @cached_property
+    def implementation(self) -> ImplementationService:
+        return ImplementationService(
+            self.session,
+            self.clock,
+            self.audit,
+            self.identity,
+            self.artifacts,
+            self.decisions,
+            self.projects,
+            self.backlog,
+            self.workflow,
+            self.workspace.repos,
+            self.policies.change_sets,
+            self.workspace.sandbox,
         )

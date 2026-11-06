@@ -1,0 +1,46 @@
+# Phase 9 change sets: what a Developer agent's change may contain, and how it is built and tested.
+# Enforced in code (app/modules/implementation/rules.py), both on the agent's output and when the change set is
+# recorded. Loaded at startup; invalid values fail startup.
+#
+# limits: per change set. context_bytes: how much of the repository the agent is shown in full (beyond that it
+#   sees the file list plus the files its work item's dependencies changed).
+# protected_paths: never changed by an agent: pipeline definitions, git attributes and submodules, Agentra's own
+#   files. An entry ending in "/" is a folder at any depth; anything else is a file name.
+# test_paths: what counts as a test file (a folder at any depth when ending in "/", otherwise a file name pattern).
+# tests_required_for: work types whose change set must add or change at least one test file.
+# sandbox: the build and test run of each change set version, inside a sandbox VM (Increment 5b).
+version: 1
+
+limits:
+  max_files: 30
+  max_file_bytes: 200000
+  max_total_bytes: 1000000
+  context_bytes: 120000
+
+protected_paths:
+  - .github/
+  - .gitlab/
+  - .circleci/
+  - .azure-pipelines/
+  - .agentra/
+  - .gitlab-ci.yml
+  - azure-pipelines.yml
+  - Jenkinsfile
+  - .gitattributes
+  - .gitmodules
+
+test_paths:
+  - tests/
+  - test/
+  - __tests__/
+  - test_*
+  - "*_test.*"
+  - "*.test.*"
+  - "*.spec.*"
+  - "*Tests.cs"
+  - "*Test.java"
+
+tests_required_for: [build, integrate, migrate]
+
+sandbox:
+  timeout_seconds: 900

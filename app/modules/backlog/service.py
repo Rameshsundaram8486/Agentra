@@ -107,6 +107,15 @@ class BacklogService:
         assert row is not None
         return [EpicView.model_validate(e) for e in row.epics], [self._item_view(i) for i in repository.items_for(self._session, record.id)]
 
+    def current_version_id(self, project_id: uuid.UUID) -> uuid.UUID | None:
+        record = self._record(project_id)
+        return record.id if record else None
+
+    def planned_design(self, version_id: uuid.UUID) -> uuid.UUID | None:
+        """The design version a backlog version plans."""
+        row = repository.version_for(self._session, version_id)
+        return row.design_version_id if row else None
+
     def stale_reason(self, version_id: uuid.UUID) -> str | None:
         row = repository.version_for(self._session, version_id)
         if row is None:

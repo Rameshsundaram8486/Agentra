@@ -32,10 +32,10 @@ from app.modules.workflow.gates import (
     task_start_failures,
 )
 from app.modules.workflow.models import PhaseRun, StateTransition, Task
-from app.modules.workflow.schemas import PhaseRunView, StateTransitionView, TaskView, TransitionRequest
+from app.modules.workflow.schemas import GeneratedTask, PhaseRunView, StateTransitionView, TaskView, TransitionRequest
 from app.modules.workflow.state_machine import allowed_targets, check_transition
 
-__all__ = ["PhaseRunView", "StateTransitionView", "TaskView", "TransitionRequest", "WorkflowService"]
+__all__ = ["GeneratedTask", "PhaseRunView", "StateTransitionView", "TaskView", "TransitionRequest", "WorkflowService"]
 
 
 class WorkflowService:
@@ -49,8 +49,12 @@ class WorkflowService:
         decisions: DecisionsService,
         open_questions: Callable[[uuid.UUID], int] | None = None,
         exit_checks: Mapping[str, Callable[[uuid.UUID], list[str]]] | None = None,
+        task_sources: Mapping[str, Callable[[uuid.UUID], list[GeneratedTask]]] | None = None,
+        task_checks: Mapping[str, Callable[[uuid.UUID, str], list[str]]] | None = None,
     ) -> None:
-        """open_questions(task_id) counts open questions agent runs raised for a task (from the executions module)."""
+        """open_questions(task_id) counts open questions agent runs raised for a task (from the executions module).
+        task_sources(project_id) yields a phase's generated tasks; task_checks(project_id, subject) gates completing
+        one (both named in the phase definition's generated_tasks)."""
         self._session = session
         self._clock = clock
         self._catalog = catalog
@@ -59,6 +63,8 @@ class WorkflowService:
         self._decisions = decisions
         self._open_questions = open_questions
         self._exit_checks = exit_checks or {}
+        self._task_sources = task_sources or {}
+        self._task_checks = task_checks or {}
 
     def open_project(self, actor: Actor, project_id: uuid.UUID) -> None:
         """Creates a phase run (and its tasks) for every defined phase. Called by the projects service."""
@@ -124,6 +130,16 @@ class WorkflowService:
         if run is None:
             return None
         task = next((t for t in repository.tasks_for_phase_run(self._session, run.id) if t.key == key), None)
+        if task is None:
+            return None
+        return self._task_view(task, self._catalog.lifecycle(self._definition(run).task_lifecycle), frozenset())
+
+    def task_by_subject(self, project_id: uuid.UUID, phase: int, subject: str) -> TaskView | None:
+        """The generated task of a phase working on one subject, or None. Callers authorise first."""
+        run = repository.get_phase_run_for(self._session, project_id, phase)
+        if run is None:
+            return None
+        task = next((t for t in repository.tasks_for_phase_run(self._session, run.id) if t.subject == subject), None)
         if task is None:
             return None
         return self._task_view(task, self._catalog.lifecycle(self._definition(run).task_lifecycle), frozenset())
@@ -217,6 +233,8 @@ class WorkflowService:
             return failures
 
         self._apply(actor, "phase_run", PhaseRun, run, lifecycle, request, gates)
+        if request.to_state == IN_PROGRESS and definition.generated_tasks is not None:
+            self._generate_tasks(actor, run, definition)
         roles = self._identity.roles_for(actor, run.project_id)
         return self._phase_view(run, repository.tasks_for_phase_run(self._session, run.id), roles)
 
@@ -230,10 +248,13 @@ class WorkflowService:
             raise PermissionDeniedError("An agent may only move tasks assigned to it")
         task_definition = next((t for t in definition.tasks if t.key == task.key), None)
         required = task_definition.required_approvals if task_definition else ()
+        generated = definition.generated_tasks if task.subject is not None else None
 
         def gates(_from_state: str, to_state: str) -> list[str]:
             if to_state == COMPLETED:
                 failures = self._decisions.approval_gate_failures(run.project_id, required)
+                if generated is not None:
+                    failures += self._task_checks[generated.completion_check](run.project_id, task.subject)  # type: ignore[arg-type]
                 if task_definition and task_definition.requires_answered_questions and self._open_questions:
                     if count := self._open_questions(task.id):
                         failures.append(f"{count} question(s) the agent raised are still open; answer or defer them first")
@@ -303,6 +324,55 @@ class WorkflowService:
 
     # Helpers --------------------------------------------------------------------------------
 
+    def _generate_tasks(self, actor: Actor, run: PhaseRun, definition: PhaseDefinition) -> None:
+        """Adds a task per subject the phase's source yields that it does not have yet; each depends on the tasks of
+        the subjects it names. Runs each time the phase moves to in progress, so a resumed phase picks up nothing
+        twice."""
+        generated = definition.generated_tasks
+        assert generated is not None
+        existing = repository.tasks_for_phase_run(self._session, run.id)
+        keys = {task.subject: task.key for task in existing if task.subject is not None}
+        wanted = self._task_sources[generated.source](run.project_id)
+        for item in wanted:
+            keys.setdefault(item.subject, f"{generated.key_prefix}_{item.subject.lower().replace('-', '_')}")
+        unknown = sorted({d for item in wanted for d in item.depends_on} - set(keys))
+        if unknown:
+            raise ValidationFailedError(f"Generated tasks depend on unknown subjects: {', '.join(unknown)}")
+        now, position, added = self._clock.now(), len(existing), []
+        initial = self._catalog.lifecycle(definition.task_lifecycle).initial_state
+        have = {task.subject for task in existing}
+        for item in wanted:
+            if item.subject in have:
+                continue
+            repository.add(
+                self._session,
+                Task(
+                    phase_run_id=run.id,
+                    project_id=run.project_id,
+                    key=keys[item.subject],
+                    subject=item.subject,
+                    position=position,
+                    title=item.title,
+                    agent=generated.agent,
+                    depends_on=[keys[d] for d in item.depends_on],
+                    state=initial,
+                    version=1,
+                    created_at=now,
+                    updated_at=now,
+                ),
+            )
+            position += 1
+            added.append(item.subject)
+        if added:
+            self._audit.record(
+                actor_id=actor.id,
+                action="workflow.generate_tasks",
+                entity_type="phase_run",
+                entity_id=run.id,
+                project_id=run.project_id,
+                after={"phase": run.phase, "source": generated.source, "subjects": added},
+            )
+
     def _load(self, entity_type: str, entity_id: uuid.UUID) -> PhaseRun | Task:
         entity = (
             repository.get_phase_run(self._session, entity_id)
@@ -343,6 +413,7 @@ class WorkflowService:
             id=task.id,
             phase_run_id=task.phase_run_id,
             key=task.key,
+            subject=task.subject,
             title=task.title,
             agent=task.agent,
             depends_on=list(task.depends_on),

@@ -2,7 +2,7 @@
 
 AI-native operating platform for an IT services company. Specialised agents do bounded work, a workflow engine owns state, and humans approve consequential decisions against exact artifact versions.
 
-> **Status: Increment 4d done: design change requests; Phase 8 (solution architecture and technical design) is complete.** Working so far:
+> **Status: Increment 5a done: Phase 9 work items and change sets (no sandbox VMs yet, so nothing can be built, tested, approved or merged outside the tests).** Working so far:
 > - sign-in with server sessions
 > - projects and role-based memberships
 > - a workflow engine driven by YAML lifecycles, with entry and exit gates, optimistic locking and a record of every transition
@@ -31,6 +31,9 @@ AI-native operating platform for an IT services company. Specialised agents do b
 > - design change requests in the same change request register: raised against the approved design while Phase 8 is open, with the requirements and backlog work items they touch computed by Agentra, approved by an owner and a reviewer, and applied by the Solution Architect to the listed items only; the changed design is reviewed and approved again and the backlog replanned
 > - Phase 8 reports: a design summary (customers may see it; review outcomes as counts only) and an internal detailed design pack with every finding, response, approval and agent run
 > - agent evals: synthetic cases for the Business Analyst agent, graded in code; recorded answers replay for free, and regressions against the committed baseline fail the run
+> - Phase 9 work items: when Phase 9 starts, Agentra adds a task per work item of the approved backlog (following its dependencies) and creates the project's git repository, which Agentra only stores and merges, never runs
+> - the Developer agent's change sets: whole files plus unit tests for one work item, or questions when it is unclear; checked in code (paths, protected files, sizes, secrets, tests for code work, links only to the work item's own design items and requirements), committed to a branch and recorded as a versioned document with the diff
+> - the sandbox gate: a reviewer can approve a change set only after a passing build and test run of that exact version in a sandbox VM; Agentra then merges it into main (a conflict changes nothing and sends the task back) and completes the task. The sandbox VMs themselves are Increment 5b, so until then every run is recorded as not run and nothing is approved
 >
 > Everything else is still scaffold: those files carry a one-line purpose header and say "Scaffold only". See [docs/architecture/overview.md](docs/architecture/overview.md).
 

@@ -49,6 +49,8 @@ agents:
     tasks:
       plan_backlog:
         max_tokens: 48000   # every work item with its links, sizes and dependencies
+      implement_work_item:
+        max_tokens: 64000   # whole files, not patches, plus their tests
 
 budget:
   monthly_usd: 50

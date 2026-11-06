@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     anthropic_api_key: SecretStr | None = None
     artifact_store: Literal["local", "azure_blob"] = "local"
     artifact_store_path: Path = Path("./var/artifacts")
+    repository_path: Path = Path("./var/repos")  # the project git repositories (Phase 9)
     azure_key_vault_url: str | None = None
     sandbox_provider: Literal["hyperv", "azure", "fake"] = "hyperv"
     log_level: str = "INFO"
@@ -34,6 +35,12 @@ class Settings(BaseSettings):
     def artifact_root(self) -> Path:
         """Artifact store folder; a relative path is taken from the repository root."""
         path = self.artifact_store_path
+        return path if path.is_absolute() else (ROOT_DIR / path).resolve()
+
+    @property
+    def repository_root(self) -> Path:
+        """Project repositories folder; a relative path is taken from the repository root."""
+        path = self.repository_path
         return path if path.is_absolute() else (ROOT_DIR / path).resolve()
 
     @property

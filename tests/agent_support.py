@@ -354,6 +354,40 @@ def backlog_items() -> list[dict[str, Any]]:
     ]
 
 
+# Scripted Developer change sets (Phase 9). WI-001 deploys ENV-001; WI-002 configures SEC-001 (see backlog_items()).
+
+def cfile(path: str, content: str = "", action: str = "add") -> dict[str, Any]:
+    return {"path": path, "action": action, "content": content}
+
+
+def change_set_json(files: list[dict[str, Any]] | None = None, *, design_items: list[str] | None = None, **changes: Any) -> str:
+    """A change set for WI-001 by default: an environment definition with a test."""
+    output: dict[str, Any] = {
+        "outcome": "change_set",
+        "summary": "Defines the development and test environments for WI-001.",
+        "files": files if files is not None else [
+            cfile("deploy/environments.yaml", "environments:\n  - name: dev\n  - name: test\n"),
+            cfile("tests/test_environments.py", "def test_environments_are_listed():\n    assert True\n"),
+        ],
+        "test_command": "python -m pytest -q",
+        "design_items": design_items if design_items is not None else ["ENV-001"],
+        "requirements": [],
+        "acceptance_criteria": [],
+        "limitations": [],
+        "questions": [],
+        "review_responses": [],
+    }
+    output.update(changes)
+    return json.dumps(output)
+
+
+def implement(run: Any, team: Any, work_item: str, actor: Any = None) -> Any:
+    """Asks the Developer agent to implement a work item of the current backlog, as the PM unless another actor is given."""
+    backlog = run(lambda s: s.backlog.current_version_id(team.project.id))
+    data = AgentRunCreate(agent_key="developer", task_key="implement_work_item", artifact_version_id=backlog, subject=work_item)
+    return run(lambda s: s.executions.request_run(actor or team.pm.actor, team.project.id, data))
+
+
 def backlog_json(items: list[dict[str, Any]] | None = None, epics: list[dict[str, Any]] | None = None, **changes: Any) -> str:
     output = {
         "summary": "Foundations first, then the app and its reminders.",

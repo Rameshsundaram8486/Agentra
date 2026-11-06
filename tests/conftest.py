@@ -21,7 +21,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa: F401  (registers every table)
-from app.composition import Policies, Services, load_policies
+from app.composition import Policies, Services, Workspace, load_policies
 from app.harness.runner import AgentRunner
 from app.infrastructure.clock import FixedClock
 from app.infrastructure.db import create_db_engine, make_session_factory
@@ -37,13 +37,15 @@ from app.modules.decisions.service import ApprovalCreate, DecisionOutcomeCreate
 from app.modules.executions.schemas import AgentRunCreate
 from app.modules.errors import InvalidTransitionError
 from app.modules.identity.service import SYSTEM_ACTOR, Actor
+from app.modules.implementation.git_repo import GitRepositories
 from app.modules.projects.service import ProjectCreate, ProjectView
 from app.modules.workflow.service import TransitionRequest
+from app.workers.implementation_jobs import ImplementationJobs
 from tests.agent_support import (
     BRIEF, DISCOVERY_NOTES, ask, ba_json, backlog_json, compare_output, design_json, draft_items, draft_json, feasibility_json, move_task, phase_task,
     process, security_json,
 )
-from tests.support import DEFAULT_PASSWORD, Team, TestUser, alembic_config
+from tests.support import DEFAULT_PASSWORD, ScriptedSandbox, Team, TestUser, alembic_config
 
 
 class _TestEnvironment(BaseSettings):
@@ -93,6 +95,23 @@ def store(tmp_path_factory: pytest.TempPathFactory) -> LocalArtifactStore:
     return LocalArtifactStore(tmp_path_factory.mktemp("artifact-store"))
 
 
+@pytest.fixture(scope="session")
+def repos(tmp_path_factory: pytest.TempPathFactory) -> GitRepositories:
+    """Project git repositories in a temporary folder (each test's projects are new, so they never collide)."""
+    return GitRepositories(tmp_path_factory.mktemp("repos"))
+
+
+@pytest.fixture
+def sandbox() -> ScriptedSandbox:
+    """The test sandbox: script results with sandbox.passes() / sandbox.fails(); unscripted runs are not run."""
+    return ScriptedSandbox()
+
+
+@pytest.fixture
+def workspace(repos: GitRepositories, sandbox: ScriptedSandbox) -> Workspace:
+    return Workspace(repos, sandbox)
+
+
 @pytest.fixture
 def clock() -> FixedClock:
     return FixedClock(datetime.now(UTC).replace(microsecond=0))
@@ -104,13 +123,21 @@ def session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 @pytest.fixture
-def services_for(clock: FixedClock, policies: Policies, store: LocalArtifactStore) -> Callable[..., Services]:
+def services_for(clock: FixedClock, policies: Policies, store: LocalArtifactStore, workspace: Workspace) -> Callable[..., Services]:
     """services_for(session) wires services the same way the API does."""
 
     def _services(session: Session, *, policies: Policies = policies) -> Services:
-        return Services(session, clock, policies, store)
+        return Services(session, clock, policies, store, workspace)
 
     return _services
+
+
+@pytest.fixture
+def implementation_jobs(
+    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore, workspace: Workspace
+) -> ImplementationJobs:
+    """The worker's Phase 9 job handlers (sandbox runs and merges), on the test sandbox."""
+    return ImplementationJobs(session_factory, clock, policies, store, workspace)
 
 
 @pytest.fixture
@@ -349,12 +376,12 @@ def model() -> FakeProvider:
 
 @pytest.fixture
 def runner_for(
-    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore, model: FakeProvider
+    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore, model: FakeProvider, workspace: Workspace
 ) -> Callable[..., AgentRunner]:
     """runner_for(policies=...) builds the agent runner on the fake model."""
 
     def _runner(policies: Policies = policies) -> AgentRunner:
-        return AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, model))
+        return AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, model), workspace)
 
     return _runner
 
@@ -410,10 +437,10 @@ def phase8(
 
 @pytest.fixture
 def client_for(
-    test_settings: Settings, clock: FixedClock, policies: Policies, store: LocalArtifactStore
+    test_settings: Settings, clock: FixedClock, policies: Policies, store: LocalArtifactStore, workspace: Workspace
 ) -> Iterator[Callable[..., TestClient]]:
     """client_for(user) returns an API client signed in as that user; client_for() an anonymous one."""
-    app = create_app(test_settings, clock=clock, policies=policies, store=store)
+    app = create_app(test_settings, clock=clock, policies=policies, store=store, workspace=workspace)
     clients: list[TestClient] = []
 
     def _client(user: TestUser | None = None) -> TestClient:
@@ -540,3 +567,29 @@ def plan_backlog(
         return detail
 
     return _plan
+
+
+def complete_phase_8(run: Callable[..., Any], team: Team) -> None:
+    """Closes the Phase 8 tasks as the reviewer (cancelling any never started) and completes the phase."""
+    for key in ("review_security", "review_feasibility", "plan_backlog"):
+        task = phase_task(run, team, key, phase=8)
+        if task.state == "waiting_for_review":
+            move_task(run, team.reviewer.actor, task, "completed")
+        elif task.state == "not_started":
+            move_task(run, team.owner.actor, task, "cancelled")
+    for actor, state in ((team.pm.actor, "waiting_for_review"), (team.reviewer.actor, "completed")):
+        phase = next(p for p in run(lambda s: s.workflow.list_phase_runs(team.owner.actor, team.project.id)) if p.phase == 8)
+        if phase.state != state:
+            run(lambda s, a=actor, st=state, ph=phase: s.workflow.transition_phase_run(a, ph.id, TransitionRequest(to_state=st, reason="Test step", expected_version=ph.version)))
+
+
+@pytest.fixture
+def phase9(approved_design: Team, run: Callable[..., Any], plan_backlog: Callable[..., Any], move_phase: Callable[..., None]) -> Team:
+    """The approved backlog (WI-001 to WI-005) planned and approved, Phase 8 completed and Phase 9 in progress, so its
+    tasks and the project repository exist. The Developer agent is on the team."""
+    team = approved_design
+    plan_backlog(team)
+    complete_phase_8(run, team)
+    move_phase(team.owner.actor, team.project.id, 9, "ready")
+    move_phase(team.pm.actor, team.project.id, 9, "in_progress")
+    return team
