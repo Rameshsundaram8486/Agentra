@@ -47,3 +47,21 @@ tasks:
     prompt: prompts/draft_design.v2.md
     output_schema: schemas/draft_design.v1.json
     max_attempts: 2
+
+  apply_design_change:
+    title: Apply a design change request
+    description: >
+      Applies one approved design change request to the approved design: changes only the design items it lists
+      (and adds items only if it allows), keeping every other item as it is. The new version is reviewed and
+      approved again.
+    phase: 8
+    workflow_task: null
+    phase_states: [in_progress, waiting_for_input]
+    input_artifact_types: [requirements_baseline]
+    input_must_be_approved: true
+    context_artifact_types: [project_brief, source_document]
+    context_decisions_from: [business_analyst.clarify_brief, business_analyst.draft_requirements, compare_options, draft_design]
+    requires_change_request: true
+    prompt: prompts/apply_design_change.v1.md
+    output_schema: schemas/draft_design.v1.json
+    max_attempts: 2

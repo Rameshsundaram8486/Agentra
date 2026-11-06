@@ -9,7 +9,8 @@
 # baselines: artifact types under change control. Once the current version is approved, nobody can add a
 #   version directly; only an approved change request can (applied by the requirements service).
 # change_requests.required_roles: a change request needs one approval per listed role, each from a
-#   different person, and never from the person who raised it. Any rejection rejects it.
+#   different person, and never from the person who raised it. Any rejection rejects it. by_baseline sets
+#   other roles for a change to another baseline (the design).
 #
 # Agents never approve or decide. That is enforced in code; a role list containing "agent" fails startup.
 # Phase-specific types are refined as each phase increment is built.
@@ -67,4 +68,6 @@ decisions:
 baselines: [requirements_baseline, design_baseline]
 
 change_requests:
-  required_roles: [owner, customer_approver]
+  required_roles: [owner, customer_approver]  # the requirements baseline (scope)
+  by_baseline:
+    design_baseline: [owner, reviewer]  # a technical change; scope changes go through the requirements (Increment 4d)

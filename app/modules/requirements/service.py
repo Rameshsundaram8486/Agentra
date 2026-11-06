@@ -11,6 +11,10 @@ exactly those items. Rules enforced here, not by the agent:
   the items the change request lists (app/modules/requirements/change_control.py).
 - A change request needs one approval per configured role, from different people, never from the person
   who raised it, and never from an agent. Any rejection rejects it. Requests and their events are never edited.
+- The change request register also holds design change requests (Increment 4d): they list design items, are
+  approved by the roles configured for the design baseline, and are applied by the design module, which
+  records the application here. Which design items exist, and what they touch, comes from hooks wired in
+  app/composition.py.
 """
 
 import re
@@ -56,6 +60,7 @@ __all__ = [
     "BASELINE_TITLE",
     "BASELINE_TYPE",
     "ChangeRequestCreate",
+    "ComparableItem",
     "ChangeRequestDecisionCreate",
     "ChangeRequestView",
     "DraftItem",
@@ -65,7 +70,10 @@ __all__ = [
     "ReviewResponse",
     "SourceRef",
     "TraceabilityView",
+    "change_violations",
 ]
+
+DESIGN_BASELINE = "design_baseline"
 
 BASELINE_TYPE = "requirements_baseline"
 BASELINE_TITLE = "Business requirements"
@@ -98,12 +106,18 @@ class RequirementsService:
         artifacts: ArtifactsService,
         decisions: DecisionsService,
         projects: ProjectsService,
-        change_request_roles: Sequence[str] = ("owner", "customer_approver"),
+        change_request_roles: Mapping[str, Sequence[str]] | None = None,
         design_lookup: Callable[[uuid.UUID], Mapping[str, list[str]] | None] | None = None,
         backlog_lookup: Callable[[uuid.UUID], Mapping[str, list[str]] | None] | None = None,
+        design_change_target: Callable[[uuid.UUID], tuple[VersionRecord, Mapping[str, list[str]]]] | None = None,
+        design_backlog_lookup: Callable[[uuid.UUID], Mapping[str, list[str]] | None] | None = None,
     ) -> None:
-        """design_lookup(project_id) maps requirement IDs to the design items covering them (design module);
-        backlog_lookup(project_id) to the work items implementing them (backlog module)."""
+        """change_request_roles: baseline type -> roles that must approve a change request to it.
+        design_lookup(project_id) maps requirement IDs to the design items covering them (design module);
+        backlog_lookup(project_id) to the work items implementing them (backlog module).
+        design_change_target(project_id) gives the approved design version a change request may be raised
+        against, with design item ID -> requirement IDs it satisfies, or raises why none may be;
+        design_backlog_lookup(project_id) maps design item IDs to the work items implementing them."""
         self._session = session
         self._clock = clock
         self._audit = audit
@@ -111,7 +125,9 @@ class RequirementsService:
         self._artifacts = artifacts
         self._decisions = decisions
         self._projects = projects
-        self._change_request_roles = tuple(change_request_roles)
+        self._change_request_roles = {key: tuple(roles) for key, roles in (change_request_roles or {BASELINE_TYPE: ("owner", "customer_approver")}).items()}
+        self._design_change_target = design_change_target
+        self._design_backlog_lookup = design_backlog_lookup
         self._design_lookup = design_lookup
         self._backlog_lookup = backlog_lookup
 
@@ -128,12 +144,50 @@ class RequirementsService:
         request = repository.get_change_request(self._session, change_request_id)
         if request is None or request.project_id != project_id:
             return "Change request not found"
+        if request.baseline_type != BASELINE_TYPE:
+            return f"{self._cr_label(request)} changes the design; ask the Solution Architect to apply it"
         status = self._cr_status(request)
         if status != "approved":
             return f"{self._cr_label(request)} is {status}; only an approved change request can be applied"
         if not locked or record is None or record.id != request.baseline_version_id:
             return f"{self._cr_label(request)} was raised against a baseline version that is no longer the approved current version"
         return None
+
+    def design_change_problem(self, project_id: uuid.UUID, change_request_id: uuid.UUID, design_version_id: uuid.UUID) -> str | None:
+        """Why a design change request cannot be applied to this (current, approved) design version, or None."""
+        request = repository.get_change_request(self._session, change_request_id)
+        if request is None or request.project_id != project_id:
+            return "Change request not found"
+        if request.baseline_type != DESIGN_BASELINE:
+            return f"{self._cr_label(request)} changes the requirements; ask the Business Analyst to apply it"
+        status = self._cr_status(request)
+        if status != "approved":
+            return f"{self._cr_label(request)} is {status}; only an approved change request can be applied"
+        if request.baseline_version_id != design_version_id:
+            return f"{self._cr_label(request)} was raised against a design version that is no longer the approved current version"
+        return None
+
+    def change_request_label(self, change_request_id: uuid.UUID) -> str:
+        """CR-002: title, for another module's view. Callers authorise first."""
+        request = self._load_cr(change_request_id)
+        return f"{self._cr_label(request)}: {request.title}"
+
+    def record_change_applied(self, actor: Actor, change_request_id: uuid.UUID, artifact_version_id: uuid.UUID) -> None:
+        """Records that another module's new baseline version applied this (approved) change request."""
+        request = self._load_cr(change_request_id)
+        repository.add(
+            self._session,
+            ChangeRequestEvent(
+                change_request_id=request.id,
+                project_id=request.project_id,
+                event="applied",
+                role=None,
+                actor_id=actor.id,
+                comment=None,
+                artifact_version_id=artifact_version_id,
+                created_at=self._clock.now(),
+            ),
+        )
 
     def current_baseline(self, project_id: uuid.UUID) -> tuple[VersionRecord, str] | None:
         """The current requirements version and its approval status. Callers authorise first."""
@@ -362,19 +416,34 @@ class RequirementsService:
         self._identity.require_project(actor, project_id, "change.raise")
         require_human(actor, "raise a change request")
         data = ChangeRequestCreate.model_validate(data)
-        record = self._baseline_record(project_id)
-        if record is None or not self._artifacts.is_locked_baseline(record.artifact_id):
-            raise InvalidTransitionError("There is no approved requirements baseline yet; until there is, ask for a new draft instead")
-        known = {row.item_id for row in repository.items_for(self._session, record.id)}
         affected = list(dict.fromkeys(item.strip().upper() for item in data.affected_item_ids if item.strip()))
+        if data.baseline_type == DESIGN_BASELINE:
+            if self._design_change_target is None:
+                raise InvalidTransitionError("Design change requests are not available")
+            record, satisfies = self._design_change_target(project_id)  # raises when no design change may be raised now
+            known = set(satisfies)
+            impacted_requirements = sorted({rid for item in affected for rid in satisfies.get(item, [])})
+            work_items = (self._design_backlog_lookup(project_id) if self._design_backlog_lookup else None) or {}
+            what = "design items"
+        else:
+            record = self._baseline_record(project_id)  # type: ignore[assignment]
+            if record is None or not self._artifacts.is_locked_baseline(record.artifact_id):
+                raise InvalidTransitionError("There is no approved requirements baseline yet; until there is, ask for a new draft instead")
+            known = {row.item_id for row in repository.items_for(self._session, record.id)}
+            impacted_requirements = [item for item in affected]
+            work_items = (self._backlog_lookup(project_id) if self._backlog_lookup else None) or {}
+            what = "requirements"
         unknown = [item for item in affected if item not in known]
         if unknown:
-            raise ValidationFailedError(f"Not in the baseline v{record.version_no}: {', '.join(unknown)}")
+            raise ValidationFailedError(f"Not in the {'design' if data.baseline_type == DESIGN_BASELINE else 'baseline'} v{record.version_no}: {', '.join(unknown)}")
         if not affected and not data.allows_new_items:
-            raise ValidationFailedError("List the requirements to change, or allow new items, or both")
+            raise ValidationFailedError(f"List the {what} to change, or allow new items, or both")
         request = ChangeRequest(
             project_id=project_id,
             number=repository.next_change_request_number(self._session, project_id),
+            baseline_type=data.baseline_type,
+            impacted_requirements=impacted_requirements,
+            impacted_work_items=sorted({wi for item in affected for wi in work_items.get(item, [])}),
             baseline_artifact_id=record.artifact_id,
             baseline_version_id=record.id,
             title=data.title.strip(),
@@ -398,7 +467,15 @@ class RequirementsService:
             entity_id=request.id,
             project_id=project_id,
             reason=request.reason,
-            after={"cr": self._cr_label(request), "baseline_version_no": record.version_no, "affected": affected, "allows_new_items": data.allows_new_items},
+            after={
+                "cr": self._cr_label(request),
+                "baseline": data.baseline_type,
+                "baseline_version_no": record.version_no,
+                "affected": affected,
+                "allows_new_items": data.allows_new_items,
+                "impacted_requirements": request.impacted_requirements,
+                "impacted_work_items": request.impacted_work_items,
+            },
         )
         return self._cr_views([request])[0]
 
@@ -417,9 +494,10 @@ class RequirementsService:
             raise PermissionDeniedError("You have already decided this change request; another person must give the other approval")
         decided_roles = {event.role for event in events if event.role}
         roles = self._identity.roles_for(actor, request.project_id)
-        role = next((r for r in self._change_request_roles if r in roles and r not in decided_roles), None)
+        required = self._roles_for(request)
+        role = next((r for r in required if r in roles and r not in decided_roles), None)
         if role is None:
-            needed = [r for r in self._change_request_roles if r not in decided_roles]
+            needed = [r for r in required if r not in decided_roles]
             raise PermissionDeniedError(f"Deciding this change request needs one of these roles: {', '.join(needed)}")
         comment = (data.comment or "").strip() or None
         if data.decision == "rejected" and comment is None:
@@ -468,6 +546,9 @@ class RequirementsService:
         ref = item.ref if isinstance(item, DraftItem) else item.item_id
         return ComparableItem(ref, item.kind, item.title, item.statement, item.label, item.priority, item.acceptance_criteria)
 
+    def _roles_for(self, request: ChangeRequest) -> tuple[str, ...]:
+        return self._change_request_roles.get(request.baseline_type, self._change_request_roles[BASELINE_TYPE])
+
     @staticmethod
     def _cr_label(request: ChangeRequest) -> str:
         return f"CR-{request.number:03d}"
@@ -486,7 +567,7 @@ class RequirementsService:
         if any(event.event == "rejected" for event in events):
             return "rejected"
         approved = {event.role for event in events if event.event == "approved"}
-        return "approved" if set(self._change_request_roles) <= approved else "open"
+        return "approved" if set(self._roles_for(request)) <= approved else "open"
 
     def _cr_views(self, requests: list[ChangeRequest]) -> list[ChangeRequestView]:
         events = repository.change_request_events(self._session, [request.id for request in requests])
@@ -501,6 +582,7 @@ class RequirementsService:
                     id=request.id,
                     project_id=request.project_id,
                     cr_id=self._cr_label(request),
+                    baseline_type=request.baseline_type,  # type: ignore[arg-type]
                     baseline_artifact_id=request.baseline_artifact_id,
                     baseline_version_id=request.baseline_version_id,
                     baseline_version_no=self._artifacts.version_record(request.baseline_version_id).version_no,
@@ -510,10 +592,12 @@ class RequirementsService:
                     impact=request.impact,
                     affected_item_ids=request.affected_item_ids,
                     allows_new_items=request.allows_new_items,
+                    impacted_requirements=request.impacted_requirements,
+                    impacted_work_items=request.impacted_work_items,
                     raised_by=request.raised_by,
                     raised_by_name=names.get(request.raised_by),
                     status=self._cr_status(request, rows),  # type: ignore[arg-type]
-                    required_roles=list(self._change_request_roles),
+                    required_roles=list(self._roles_for(request)),
                     approved_roles=[e.role for e in rows if e.event == "approved" and e.role],
                     applied_version_no=self._artifacts.version_record(applied.artifact_version_id).version_no if applied and applied.artifact_version_id else None,
                     events=[

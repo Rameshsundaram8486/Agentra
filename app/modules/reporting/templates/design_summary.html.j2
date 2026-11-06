@@ -30,6 +30,7 @@
   <p>{{ d.title }} v{{ d.version_no }}: <strong>{{ d.approval_status | replace("_", " ") }}</strong>{% if d.approved %}, approved by {{ d.approved.by }} on {{ d.approved.at }} (content sha256 {{ d.approved.sha256[:12] }}){% endif %}.
     Designed against requirements v{{ d.requirements_version_no }}.</p>
   {% if d.stale_reason %}<p class="missing">{{ d.stale_reason }}.</p>{% endif %}
+  {% if d.change_request %}<p>This version applies design change request {{ d.change_request }}.</p>{% endif %}
   <p>{{ d.summary }}</p>
   <ul>
     <li>{{ d.item_count }} design items: {% for kind, count in d.kinds.items() %}{{ count }} {{ kind }}{% if not loop.last %}, {% endif %}{% endfor %}.</li>

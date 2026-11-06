@@ -14,6 +14,7 @@ def test_only_defined_agents_are_loaded_and_scaffolds_are_skipped() -> None:
     assert set(REGISTRY.agents) == {"business_analyst", "solution_architect", "security_reviewer", "developer"}
     assert {task for _, task in REGISTRY.tasks} == {
         "clarify_brief", "draft_requirements", "apply_change_request", "compare_options", "draft_design", "review_security", "review_feasibility", "plan_backlog",
+        "apply_design_change",
     }
     task = REGISTRY.task("business_analyst", "clarify_brief")
     assert task is not None

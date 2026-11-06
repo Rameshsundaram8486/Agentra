@@ -221,7 +221,11 @@ class ReportingService:
             decisions=self._decisions.list_decisions(actor, project_id),
             requirements=requirements,
             traceability=self._requirements.traceability(actor, project_id),
-            change_requests=self._requirements.list_change_requests(actor, project_id),
+            # Each phase's reports cover the change requests to its own baseline.
+            change_requests=[
+                r for r in self._requirements.list_change_requests(actor, project_id)
+                if r.baseline_type == (DESIGN_TYPE if phase_number == 8 else BASELINE_TYPE)
+            ],
             runs=runs,
             incidents=self._oversight.list_incidents(actor, project_id),
             names=self._identity.display_names(authors | actors),

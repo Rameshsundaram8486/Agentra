@@ -81,6 +81,18 @@
 </section>
 
 <section>
+  <h2>Design change requests</h2>
+  {% for r in data.change_requests %}
+  <h3>{{ r.id }} {{ r.title }} ({{ r.status }})</h3>
+  <p>{{ r.change }}<br><span class="muted">Reason: {{ r.reason }}. Impact: {{ r.impact }}.</span></p>
+  <p class="muted">Against design v{{ r.design_version_no }}; changes {{ r.affected | join(", ") or "no existing items" }}; touches requirements
+    {{ r.impacted_requirements | join(", ") or "none" }} and work items {{ r.impacted_work_items | join(", ") or "none" }}. Raised by {{ r.raised_by or "unknown" }}.
+    {% if r.applied_version_no %}Applied in design v{{ r.applied_version_no }}.{% endif %}</p>
+  <ul>{% for e in r.events %}<li><span class="muted">{{ e.at }}</span> {{ e.event }}{% if e.role %} as {{ e.role }}{% endif %} by {{ e.by }}{% if e.comment %}: {{ e.comment }}{% endif %}</li>{% endfor %}</ul>
+  {% else %}<p>No design change requests.</p>{% endfor %}
+</section>
+
+<section>
   <h2>Documents and versions</h2>
   {% for doc in data.documents %}
   <h3>{{ doc.title }} <span class="muted">({{ doc.type }})</span></h3>

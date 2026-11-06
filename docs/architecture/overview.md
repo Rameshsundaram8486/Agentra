@@ -87,7 +87,7 @@ Worker (app/workers/workflow_worker.py) claims the job
 - **The Clarify task cannot be closed while a question it raised is still open** (answer or defer it).
 - Uploaded files are parsed on the host with size, page and decompression limits; the extracted text is what agents read and quote, and the original file is kept by its hash.
 
-## Phase 8 flow (Increments 4a to 4c)
+## Phase 8 flow (Increments 4a to 4d)
 
 | Step | Who | Workflow task |
 |---|---|---|
@@ -106,6 +106,8 @@ Worker (app/workers/workflow_worker.py) claims the job
 - **Stale designs:** when the approved requirements change (a change request applied), the design is stale: it cannot be approved and Phase 8 cannot complete until it is redrafted against the newly approved requirements. That redraft may replace an approved design, because the approved change request authorised the change.
 - **The review gate** (`app/modules/design_reviews`): a design version can be approved only with an approved security review of that exact version, no high-severity gap and no item rated not feasible. A security review answers every check in `config/policies/security_checklist.yaml` (its version and hash are recorded) and cannot be signed off with a high gap or once the design has moved on; the sign-off accepts medium and low gaps for that version. The agents may not call the design secure or compliant (checked in code). The review tasks need the design approved before they close, so a later redraft cannot skip a review.
 - **The backlog** (`app/modules/backlog`) plans the approved design version: every component, data flow, interface, entity, security control and environment is implemented by at least one work item; design item, requirement and acceptance-criterion references must exist; dependencies stay inside the backlog, never point to a later wave and never form a cycle. It goes stale when the design it plans is no longer the current approved design.
+- **Design change requests** share the change request register (CR-001, CR-002 ... per project) with requirements change requests. They are raised only while Phase 8 is open, against the current approved design, and record the requirements and work items the listed items touch. Approvers are configured per baseline (`change_requests.by_baseline` in `approval_matrix.yaml`: owner and reviewer for the design). The Solution Architect's `apply_design_change` may change only the listed items (the same change-control rule as requirements, checked by the agent task and again by the design module). The new version then has to pass the review gate and approval again, and the backlog goes stale.
+- **Closed tasks and new versions:** a completed workflow task can be asked again for a new version of what it works from (for example the reviews and backlog of a changed design). The task stays completed; the run is recorded against it, and the version-bound gates decide what counts.
 - **Phase 8 reports** are built by `app/modules/reporting/design_generators.py`. The design summary may go to customers, so it shows review outcomes as counts and sign-off status, and words its next actions from those counts; the findings are only in the internal design pack.
 - **Cross-module hooks** are wired in `app/composition.py`, never imported across modules: the workflow's named exit checks `design_coverage`, `design_reviews` and `backlog_current`, the decisions module's approval preconditions for `design_baseline`, `security_review` and `implementation_backlog`, and the requirements module's design and backlog lookups.
 

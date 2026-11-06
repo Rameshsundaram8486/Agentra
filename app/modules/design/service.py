@@ -11,7 +11,9 @@ enforced here, not by the agent:
   Phase 8 cannot complete otherwise (exit check design_coverage).
 - A design becomes stale when the approved requirements it was designed against are no longer the current
   approved requirements (for example after a change request). A stale design cannot be approved.
-- An approved design is under change control; changing it arrives with Increment 4d (design change requests).
+- An approved design is under change control. While Phase 8 is open, an approved design change request
+  (owner and reviewer, raised in the shared change request register) lets the Solution Architect change the
+  items it lists, and only those; the new version needs its reviews and approval again.
 - Approving a design version also needs its security and feasibility reviews (app/modules/design_reviews),
   checked through the approval hook wired in app/composition.py.
 """
@@ -19,6 +21,7 @@ enforced here, not by the agent:
 import re
 import uuid
 from collections.abc import Sequence
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -48,7 +51,8 @@ from app.modules.design.schemas import (
 from app.modules.errors import InvalidTransitionError, NotFoundError, ValidationFailedError
 from app.modules.identity.service import Actor, IdentityService
 from app.modules.projects.service import ProjectsService
-from app.modules.requirements.service import RequirementsService
+from app.modules.requirements.service import ComparableItem, RequirementsService, change_violations
+from app.modules.workflow.service import WorkflowService
 
 __all__ = [
     "DESIGN_TITLE",
@@ -60,11 +64,14 @@ __all__ = [
     "DesignView",
     "RequirementException",
     "ReviewResponse",
+    "design_change_violations",
 ]
 
 DESIGN_TYPE = "design_baseline"
 DESIGN_TITLE = "Solution design"
 COVERED_KINDS = ("functional", "non_functional", "business_rule")
+PHASE = 8
+OPEN_PHASE_STATES = ("in_progress", "waiting_for_input", "waiting_for_review", "changes_requested", "blocked")
 _ID = re.compile(r"^(?P<prefix>[A-Z]+)-(?P<number>\d{3,})$")
 _NEW_REF_TEXT = re.compile(r"\bnew-\d+\b")
 
@@ -77,6 +84,31 @@ def status_for(item: DesignDraftItem) -> Status:
     if any(source.type == "decision" and not source.answer for source in item.sources):
         return "proposed"
     return "confirmed"
+
+
+def _comparable(ref: str, item: Any) -> ComparableItem:
+    """A design item in the shape change control compares: what it is, what it says, what it covers and links."""
+    return ComparableItem(
+        ref,
+        item.kind,
+        item.title,
+        f"{item.description} || {item.rationale}",
+        item.label,
+        "",
+        [*sorted(item.satisfies), *(f"related:{r}" for r in sorted(item.related))],
+    )
+
+
+def design_change_violations(change_request: Any, current: Sequence[DesignItemView], draft: Sequence[Any]) -> list[tuple[str, str]]:
+    """(ref, problem) for each change a draft makes that the design change request does not list. Shared by the
+    Solution Architect's check and record_draft. Draft items need ref, kind, title, description, rationale,
+    label, satisfies and related."""
+    return change_violations(
+        [_comparable(i.item_id, i) for i in current],
+        [_comparable(i.ref, i) for i in draft],
+        affected=set(change_request.affected_item_ids),
+        allows_new_items=change_request.allows_new_items,
+    )
 
 
 def parse_item_id(value: str) -> tuple[str, int] | None:
@@ -95,6 +127,7 @@ class DesignService:
         decisions: DecisionsService,
         projects: ProjectsService,
         requirements: RequirementsService,
+        workflow: WorkflowService,
     ) -> None:
         self._session = session
         self._clock = clock
@@ -104,6 +137,7 @@ class DesignService:
         self._decisions = decisions
         self._projects = projects
         self._requirements = requirements
+        self._workflow = workflow
 
     # For agent tasks and other modules ------------------------------------------------------------
 
@@ -118,8 +152,21 @@ class DesignService:
             return "The requirements are not approved at their current version; design builds on an approved requirements baseline"
         record = self._design_record(project_id)
         if record is not None and self._artifacts.is_locked_baseline(record.artifact_id) and not self._stale_reason(record.id):
-            return f"The solution design v{record.version_no} is approved and under change control; design change requests arrive in Increment 4d"
+            return f"The solution design v{record.version_no} is approved and under change control; raise a design change request"
         return None
+
+    def change_target(self, project_id: uuid.UUID) -> tuple[VersionRecord, dict[str, list[str]]]:
+        """The approved design a change request may be raised against, with design item ID -> requirements it
+        satisfies. Raises why none may be: Phase 8 must be open and the current design approved and not stale."""
+        phase = self._workflow.phase_state(project_id, PHASE)
+        if phase not in OPEN_PHASE_STATES:
+            raise InvalidTransitionError(f"Design change requests can be raised only while Phase {PHASE} is open (it is {(phase or 'missing').replace('_', ' ')})")
+        record = self._design_record(project_id)
+        if record is None or not self._artifacts.is_locked_baseline(record.artifact_id):
+            raise InvalidTransitionError("There is no approved design yet; until there is, ask for a new draft instead")
+        if reason := self._stale_reason(record.id):
+            raise InvalidTransitionError(f"{reason}; redraft it against the approved requirements instead")
+        return record, {row.item_id: row.satisfies for row in repository.items_for(self._session, record.id)}
 
     def current_version_id(self, project_id: uuid.UUID) -> uuid.UUID | None:
         """The current version of the project's agent-drafted design, or None before there is one."""
@@ -171,7 +218,16 @@ class DesignService:
     def record_draft(self, actor: Actor, project_id: uuid.UUID, draft: DesignDraft) -> DraftResult:
         self._identity.require_project(actor, project_id, "artifact.author")
         draft = DesignDraft.model_validate(draft)
-        if problem := self.baseline_problem(project_id):
+        change_request = None
+        if draft.change_request_id is not None:
+            # An approved design change request: only the items it lists may change (and new ones if allowed).
+            target, _ = self.change_target(project_id)
+            if problem := self._requirements.design_change_problem(project_id, draft.change_request_id, target.id):
+                raise InvalidTransitionError(problem)
+            change_request = self._requirements.get_change_request(actor, draft.change_request_id)
+            if violations := design_change_violations(change_request, self.current_items(project_id), draft.items):
+                raise ValidationFailedError(f"{change_request.cr_id} does not allow this: " + "; ".join(p for _, p in violations))
+        elif problem := self.baseline_problem(project_id):
             raise InvalidTransitionError(problem)
         requirements = self.approved_requirements(project_id)
         assert requirements is not None
@@ -242,7 +298,8 @@ class DesignService:
                 actor,
                 previous.artifact_id,
                 VersionCreate(content=content, change_summary=draft.change_summary, source_refs=draft.input_refs[:50], expected_current_version=previous.version_no),
-                # A stale approved design is replaced by a redraft against the new requirements; that is the change.
+                # A stale approved design is replaced by a redraft against the new requirements, or an approved design
+                # change request authorises the change; baseline_problem and the checks above allow nothing else.
                 authorised_change=self._artifacts.is_locked_baseline(previous.artifact_id),
             )
         version = detail.current_version
@@ -262,9 +319,12 @@ class DesignService:
                 set_flags=[flag.model_dump() for flag in set_flags],
                 input_refs=draft.input_refs,
                 review_responses=[r.model_dump(mode="json") for r in responses],
+                change_request_id=draft.change_request_id,
                 created_at=now,
             ),
         )
+        if change_request is not None:
+            self._requirements.record_change_applied(actor, change_request.id, version.id)
         known = {row.item_id for row in repository.registered_ids(self._session, project_id)}
         for position, view in enumerate(views):
             if view.item_id not in known:
@@ -303,6 +363,7 @@ class DesignService:
             project_id=project_id,
             after={
                 "version_no": version.version_no,
+                "change_request": change_request.cr_id if change_request else None,
                 "requirements_version_no": requirements.version_no,
                 "items": len(views),
                 "coverage": {"confirmed": coverage.confirmed, "covered": coverage.covered, "excepted": coverage.excepted, "gaps": coverage.gaps},
@@ -442,6 +503,7 @@ class DesignService:
             added=[i for i in ids if i not in previous] if previous else ids,
             removed=sorted(previous - set(ids)),
             review_responses=[ReviewResponse.model_validate(r) for r in row.review_responses],
+            change_request=self._requirements.change_request_label(row.change_request_id) if row.change_request_id else None,
             exceptions=[RequirementException.model_validate(e) for e in row.exceptions],
             coverage=self._coverage(row),
             items=items,

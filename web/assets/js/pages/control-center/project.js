@@ -309,11 +309,14 @@ async function decideChange(request, decision, comment, message) {
 }
 
 async function applyChange(request, message) {
+  // A requirements change is applied by the Business Analyst to the baseline it was raised against; a design change
+  // by the Solution Architect, who works from the approved requirements.
+  const design = request.baseline_type === "design_baseline";
+  const body = design
+    ? { agent_key: "solution_architect", task_key: "apply_design_change", artifact_version_id: currentRequirements?.version_id, change_request_id: request.id }
+    : { agent_key: "business_analyst", task_key: "apply_change_request", artifact_version_id: request.baseline_version_id, change_request_id: request.id };
   try {
-    await api(`/api/projects/${encodeURIComponent(projectId)}/agent-runs`, {
-      method: "POST",
-      body: { agent_key: "business_analyst", task_key: "apply_change_request", artifact_version_id: request.baseline_version_id, change_request_id: request.id },
-    });
+    await api(`/api/projects/${encodeURIComponent(projectId)}/agent-runs`, { method: "POST", body });
     await loadAgentRuns();
   } catch (failure) {
     message.textContent = failure.message;
@@ -332,10 +335,13 @@ function changeItem(request) {
     h(
       "div",
       {},
-      h("div", { class: "primary" }, `${request.cr_id}: ${request.title}`),
+      h("div", { class: "primary" }, `${request.cr_id}: ${request.title}`, h("span", { class: "muted small" }, request.baseline_type === "design_baseline" ? " (design)" : " (requirements)")),
       h("div", { class: "small" }, request.change),
       h("div", { class: "muted small" }, `Reason: ${request.reason}. Impact: ${request.impact}.`),
       h("div", { class: "muted small" }, `Against v${request.baseline_version_no}. Affects ${request.affected_item_ids.join(", ") || "no existing items"}${request.allows_new_items ? "; may add new items" : ""}. Raised by ${request.raised_by_name ?? "someone"}.`),
+      request.impacted_requirements.length || request.impacted_work_items.length
+        ? h("div", { class: "muted small" }, `Touches requirements ${request.impacted_requirements.join(", ") || "none"}; work items ${request.impacted_work_items.join(", ") || "none"}.`)
+        : null,
       h("div", { class: "muted small" }, `Needs: ${roles}`),
       ...decisions.map((line) => h("div", { class: "small" }, line)),
       request.applied_version_no ? h("div", { class: "small" }, `Applied in version ${request.applied_version_no}.`) : null,
@@ -349,7 +355,15 @@ function changeItem(request) {
           )
         : null,
       request.status === "approved" && canRunAgent
-        ? h("div", { class: "actions" }, h("button", { class: "button button-small", type: "button", onclick: () => applyChange(request, message) }, "Ask the agent to apply it"))
+        ? h(
+            "div",
+            { class: "actions" },
+            h(
+              "button",
+              { class: "button button-small", type: "button", onclick: () => applyChange(request, message) },
+              request.baseline_type === "design_baseline" ? "Ask the Solution Architect to apply it" : "Ask the agent to apply it",
+            ),
+          )
         : null,
       message,
     ),
@@ -360,8 +374,9 @@ function changeItem(request) {
 async function loadChangeRequests() {
   const requests = await api(`/api/projects/${encodeURIComponent(projectId)}/change-requests`);
   const section = document.getElementById("change-section");
-  section.hidden = !(requests.length || currentRequirements?.locked);
-  document.getElementById("cr-toggle").hidden = !(canRaiseChange && currentRequirements?.locked);
+  const lockedDesign = currentDesign?.locked && !currentDesign.stale;
+  section.hidden = !(requests.length || currentRequirements?.locked || lockedDesign);
+  document.getElementById("cr-toggle").hidden = !(canRaiseChange && (currentRequirements?.locked || lockedDesign));
   document.getElementById("change-requests").replaceChildren(
     requests.length ? h("ul", { class: "list" }, requests.map(changeItem)) : h("p", { class: "muted" }, "No change requests yet."),
   );
@@ -387,6 +402,7 @@ function enableChangeRequests() {
       await api(`/api/projects/${encodeURIComponent(projectId)}/change-requests`, {
         method: "POST",
         body: {
+          baseline_type: form.baseline_type.value,
           title: control(form, "title").value.trim(),
           reason: control(form, "reason").value.trim(),
           change: control(form, "change").value.trim(),
@@ -623,7 +639,7 @@ async function refreshAfterRun() {
     loadPhases(),
     loadDecisionSummary(),
     canViewIncidents ? loadIncidents() : Promise.resolve(),
-    loadRequirements().then(() => Promise.all([loadTraceability(), loadChangeRequests(), loadDesign(), loadBacklog()]).then(fillInputs)),
+    loadRequirements().then(() => Promise.all([loadTraceability(), loadDesign().then(loadChangeRequests), loadBacklog()]).then(fillInputs)),
     loadDocuments().then((artifacts) => fillBriefs(artifacts)),
   ]);
 }
@@ -895,7 +911,7 @@ startPage(async () => {
   if (can("artifact.view")) {
     await loadRequirements();
     enableChangeRequests();
-    await Promise.all([loadTraceability(), loadChangeRequests(), loadDesign(), loadBacklog()]);
+    await Promise.all([loadTraceability(), loadDesign().then(loadChangeRequests), loadBacklog()]);
   }
   if (can("agent_run.view")) {
     enableAgent(artifacts, can("agent.run"));

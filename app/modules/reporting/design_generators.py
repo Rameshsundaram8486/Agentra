@@ -50,6 +50,7 @@ def _design(inputs: ReportInputs) -> dict[str, Any] | None:
         "approval_status": view.approval_status,
         "approved": _approved(inputs, view.artifact_id, view.version_id),
         "stale_reason": view.stale_reason,
+        "change_request": view.change_request,
         "requirements_version_no": view.requirements_version_no,
         "summary": view.summary,
         "item_count": len(view.items),
@@ -132,6 +133,12 @@ def _next_actions(
         actions.append({"action": f"Replan the backlog: {backlog['stale_reason']}", "owner": "Owner or project manager", "due": NO_DUE_DATE})
     elif backlog["approval_status"] != "approved":
         actions.append({"action": f"Approve {backlog['title']} v{backlog['version_no']}", "owner": "Owner, project manager or reviewer", "due": NO_DUE_DATE})
+    for request in sorted(inputs.change_requests, key=lambda r: r.cr_id):
+        if request.status == "open":
+            missing = [label(r) for r in request.required_roles if r not in request.approved_roles]
+            actions.append({"action": f"Decide {request.cr_id}: {request.title}", "owner": " and ".join(missing), "due": NO_DUE_DATE})
+        elif request.status == "approved":
+            actions.append({"action": f"Apply {request.cr_id}: {request.title}", "owner": "Owner or project manager", "due": NO_DUE_DATE})
     for task in inputs.phase.tasks:
         if task.state == "waiting_for_input":
             actions.append({"action": f"Provide input for: {task.title}", "owner": "Owner or project manager", "due": NO_DUE_DATE})
@@ -286,6 +293,24 @@ def design_detailed_data(inputs: ReportInputs) -> dict[str, Any]:
             for r in runs
         ],
         "total_cost_usd": f"{sum((r.cost_usd for r in runs), start=0):.2f}" if runs else "0.00",
+        "change_requests": [
+            {
+                "id": r.cr_id,
+                "title": r.title,
+                "status": r.status,
+                "reason": r.reason,
+                "change": r.change,
+                "impact": r.impact,
+                "affected": list(r.affected_item_ids),
+                "impacted_requirements": list(r.impacted_requirements),
+                "impacted_work_items": list(r.impacted_work_items),
+                "raised_by": r.raised_by_name,
+                "design_version_no": r.baseline_version_no,
+                "applied_version_no": r.applied_version_no,
+                "events": [{"event": e.event, "role": label(e.role), "by": e.actor_name, "at": ts(e.created_at), "comment": e.comment} for e in r.events],
+            }
+            for r in sorted(inputs.change_requests, key=lambda r: r.cr_id)
+        ],
     }
 
 

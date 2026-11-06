@@ -137,3 +137,23 @@ def test_valid_outcomes() -> None:
     DecisionOutcomeCreate(action="select_option", selected_option="spse")
     DecisionOutcomeCreate(action="other", custom_choice="Hybrid with SharePoint Online for new sites")
     DecisionOutcomeCreate(action="defer", comment="Waiting for the customer's licence review")
+
+
+def test_design_change_requests_are_decided_by_an_owner_and_a_reviewer() -> None:
+    assert MATRIX.change_requests.roles_for("design_baseline") == ("owner", "reviewer")
+    assert MATRIX.change_requests.roles_for("requirements_baseline") == ("owner", "customer_approver")
+
+
+@pytest.mark.parametrize(
+    ("by_baseline", "message"),
+    [
+        ({"design_baseline": ["owner", "agent"]}, "distinct human project roles"),
+        ({"project_brief": ["owner", "reviewer"]}, "not baselines"),
+    ],
+)
+def test_per_baseline_change_request_roles_are_checked(by_baseline: dict[str, list[str]], message: str) -> None:
+    data = MATRIX.model_dump()
+    data["change_requests"]["by_baseline"] = by_baseline
+
+    with pytest.raises(ValidationError, match=message):
+        ApprovalMatrix.model_validate(data)

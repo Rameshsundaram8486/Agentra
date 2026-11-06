@@ -76,13 +76,15 @@ class RequirementItem(Base):
 
 
 class ChangeRequest(Base):
-    """A request to change an approved requirements baseline, exactly as raised. Never edited."""
+    """A request to change an approved baseline (the requirements or the design), exactly as raised. Never edited.
+    One register per project: CR-001, CR-002 ... across both baselines."""
 
     __tablename__ = "change_requests"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"), index=True)
     number: Mapped[int] = mapped_column(Integer)
+    baseline_type: Mapped[str] = mapped_column(String(32), server_default="requirements_baseline")
     baseline_artifact_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artifacts.id"))
     baseline_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("artifact_versions.id"))
     title: Mapped[str] = mapped_column(String(200))
@@ -91,6 +93,9 @@ class ChangeRequest(Base):
     impact: Mapped[str] = mapped_column(Text)
     affected_item_ids: Mapped[list[str]] = mapped_column(JSONB)
     allows_new_items: Mapped[bool] = mapped_column(Boolean)
+    # Computed by Agentra when raised: what the listed items touch.
+    impacted_requirements: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    impacted_work_items: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
     raised_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

@@ -148,6 +148,17 @@ class BacklogService:
                 found.setdefault(rid, []).append(item.item_id)
         return found
 
+    def design_item_lookup(self, project_id: uuid.UUID) -> dict[str, list[str]] | None:
+        """Design item ID -> work item IDs of the current backlog; None before there is one."""
+        record = self._record(project_id)
+        if record is None:
+            return None
+        found: dict[str, list[str]] = {}
+        for item in repository.items_for(self._session, record.id):
+            for design_item in item.design_items:
+                found.setdefault(design_item, []).append(item.item_id)
+        return found
+
     # Commands ----------------------------------------------------------------------------------------
 
     def record_draft(self, actor: Actor, project_id: uuid.UUID, draft: BacklogDraft) -> BacklogResult:

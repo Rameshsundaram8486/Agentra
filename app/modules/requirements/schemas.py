@@ -126,7 +126,11 @@ class DraftResult(BaseModel):
 ChangeRequestStatus = Literal["open", "approved", "rejected", "applied"]
 
 
+BaselineType = Literal["requirements_baseline", "design_baseline"]
+
+
 class ChangeRequestCreate(BaseModel):
+    baseline_type: BaselineType = Field(default="requirements_baseline", description="What it changes: the requirements or the design")
     title: str = Field(min_length=3, max_length=200)
     reason: str = Field(min_length=3, max_length=4000, description="Why the change is needed")
     change: str = Field(min_length=3, max_length=8000, description="What should change")
@@ -154,6 +158,7 @@ class ChangeRequestView(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
     cr_id: str
+    baseline_type: BaselineType
     baseline_artifact_id: uuid.UUID
     baseline_version_id: uuid.UUID
     baseline_version_no: int
@@ -163,6 +168,8 @@ class ChangeRequestView(BaseModel):
     impact: str
     affected_item_ids: list[str]
     allows_new_items: bool
+    impacted_requirements: list[str] = Field(description="Computed when raised: requirements the listed items touch")
+    impacted_work_items: list[str] = Field(description="Computed when raised: backlog work items the listed items touch")
     raised_by: uuid.UUID
     raised_by_name: str | None
     status: ChangeRequestStatus

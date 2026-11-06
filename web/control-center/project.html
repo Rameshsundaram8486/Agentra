@@ -157,11 +157,19 @@
             <h2>Change requests</h2>
             <button id="cr-toggle" class="button button-secondary button-small" type="button" hidden>Raise a change request</button>
           </div>
-          <p class="muted small">An approved requirements baseline changes only through a change request approved by every
-            role listed on it, each by a different person, never by the person who raised it.</p>
+          <p class="muted small">An approved requirements baseline or solution design changes only through a change request
+            approved by every role listed on it, each by a different person, never by the person who raised it. A changed
+            design is reviewed and approved again, and its backlog replanned.</p>
           <div class="card" id="cr-new" hidden>
             <form id="cr-form" class="form">
               <h3>Raise a change request</h3>
+              <div class="field">
+                <label for="cr-baseline">Applies to</label>
+                <select id="cr-baseline" name="baseline_type">
+                  <option value="requirements_baseline">The requirements (scope): an owner and a customer approver decide</option>
+                  <option value="design_baseline">The solution design (technical, while Phase 8 is open): an owner and a reviewer decide</option>
+                </select>
+              </div>
               <div class="field">
                 <label for="cr-title">Title</label>
                 <input id="cr-title" name="title" required minlength="3" maxlength="200">
@@ -180,12 +188,12 @@
               </div>
               <div class="form-row">
                 <div class="field">
-                  <label for="cr-affected">Affected requirement IDs</label>
-                  <input id="cr-affected" name="affected" placeholder="e.g. REQ-F-001, BR-002">
+                  <label for="cr-affected">Affected item IDs</label>
+                  <input id="cr-affected" name="affected" placeholder="e.g. REQ-F-001, BR-002 or CMP-001, API-002">
                   <span class="hint">Only these may change; everything else must stay exactly as approved.</span>
                 </div>
                 <div class="field">
-                  <label><input id="cr-new-items" name="allows_new_items" type="checkbox"> New requirements may be added</label>
+                  <label><input id="cr-new-items" name="allows_new_items" type="checkbox"> New items may be added</label>
                 </div>
               </div>
               <div id="cr-error" class="alert alert-error" role="alert" hidden></div>

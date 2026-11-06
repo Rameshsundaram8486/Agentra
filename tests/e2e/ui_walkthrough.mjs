@@ -339,6 +339,27 @@ async function main() {
     await shot("11c-backlog");
   });
 
+  await step("PM raises a design change request; it shows its impact and needs an owner and a reviewer", async () => {
+    await login("pm");
+    const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
+    await goto(crUrl, "!document.getElementById('cr-toggle').hidden && document.getElementById('design-summary').innerText.includes('Coverage:')", "raise offered");
+    await click("#cr-toggle");
+    await fill("#cr-baseline", "design_baseline");
+    await fill("#cr-title", "Scheduled reminders");
+    await fill("#cr-reason", "Push reminders proved unreliable");
+    await fill("#cr-change", "Send reminders from a scheduled flow");
+    await fill("#cr-impact", "One flow instead of a trigger");
+    await fill("#cr-affected", "API-001");
+    await click("#cr-form button[type=submit]");
+    await waitFor("document.querySelector('#change-requests li[data-cr=CR-002]') !== null", "design change request listed");
+    const item = await text("#change-requests li[data-cr=CR-002]");
+    for (const expected of ["(design)", "Touches requirements REQ-F-003; work items WI-005", "Needs: owner, reviewer"]) {
+      if (!item.includes(expected)) throw new Error(`design change request missing ${expected}: ${item}`);
+    }
+    await shot("11d-design-change-request");
+    await login("admin");
+  });
+
   await step("owner generates the design summary; it shows review counts but no findings", async () => {
     const crUrl = `/app/control-center/project.html?id=${seed.change_project}`;
     await goto(crUrl, "document.querySelector('#report-actions button[data-report=design_summary]') !== null", "design report button");

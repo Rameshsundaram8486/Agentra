@@ -44,6 +44,7 @@ class DesignVersion(Base):
     set_flags: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
     input_refs: Mapped[list[str]] = mapped_column(JSONB)
     review_responses: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    change_request_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("change_requests.id"))  # the design CR it applies
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

@@ -36,6 +36,8 @@ agents:
     tasks:
       draft_design:
         max_tokens: 64000   # a full design with coverage of every requirement is long
+      apply_design_change:
+        max_tokens: 64000   # returns the complete design, not only the changed items
 
   security_reviewer:
     effort: high

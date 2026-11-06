@@ -19,7 +19,15 @@ from app.guardrails.findings import Finding
 from app.harness.registry import TaskDefinition
 from app.modules.decisions.schemas import DecisionOption, DecisionRequestCreate
 from app.modules.design.schemas import Kind, Label
-from app.modules.design.service import DesignDraft, DesignDraftItem, DesignSource, RequirementException, ReviewResponse, parse_item_id
+from app.modules.design.service import (
+    DesignDraft,
+    DesignDraftItem,
+    DesignSource,
+    RequirementException,
+    ReviewResponse,
+    design_change_violations,
+    parse_item_id,
+)
 from app.modules.errors import ValidationFailedError
 from app.modules.executions.schemas import StartedRun
 
@@ -85,12 +93,17 @@ class DraftDesign:
     def prepare(self, services: Services, run: StartedRun, definition: TaskDefinition) -> PreparedPrompt:
         if problem := services.design.baseline_problem(run.project_id):
             raise ValidationFailedError(problem)
+        return self._prepare(services, run, definition)
+
+    def _prepare(self, services: Services, run: StartedRun, definition: TaskDefinition, *, preamble: str = "", extras: dict | None = None) -> PreparedPrompt:
         gathered = gather(services, run, definition, design=True)
         return PreparedPrompt(
-            user=gathered.text,
+            user=preamble + gathered.text,
             sources=gathered.sources,
             input_findings=gathered.findings,
             extras={
+                **(extras or {}),
+                "current_design": gathered.current_design,
                 "requirements_version_id": gathered.requirements.id,
                 "requirement_ids": gathered.requirement_ids,
                 "document_ids": gathered.document_ids,
@@ -182,10 +195,13 @@ class DraftDesign:
             input_refs=[f"{ref}: {name}" for ref, name in extras["document_names"].items()]
             + [f"{ref}: decision '{title}' ({answer or 'not answered yet'})" for ref, (_, title, answer) in decisions.items()],
             change_summary=(
-                f"{'Revised' if extras['known_ids'] else 'Drafted'} by the Solution Architect Agent against the approved requirements, "
+                f"Applies {extras['change_request'].cr_id} ({extras['change_request'].title}), by the Solution Architect Agent"
+                if "change_request" in extras
+                else f"{'Revised' if extras['known_ids'] else 'Drafted'} by the Solution Architect Agent against the approved requirements, "
                 f"{len(decisions)} decision(s), {len(reviews)} review comment(s) and {len(review_findings)} review finding(s)"
             ),
             review_responses=[response(r.ref, r.response) for r in output.review_responses],
+            change_request_id=extras["change_request"].id if "change_request" in extras else None,
         )
         result = services.design.record_draft(run.agent, run.project_id, draft)
         version = result.view
@@ -220,3 +236,32 @@ class DraftDesign:
                 }
             },
         )
+
+
+class ApplyDesignChange(DraftDesign):
+    """Applies one approved design change request: only the design items it lists may change, and new items only if
+    it allows them (checked here and again by the design module). Not tied to a phase task; Phase 8 must be open.
+    The new design version then needs its security and feasibility reviews and approval again."""
+
+    task_key = "apply_design_change"
+
+    def prepare(self, services: Services, run: StartedRun, definition: TaskDefinition) -> PreparedPrompt:
+        change_request_id = uuid.UUID(run.input_refs["change_request"])
+        target, _ = services.design.change_target(run.project_id)
+        if problem := services.requirements.design_change_problem(run.project_id, change_request_id, target.id):
+            raise ValidationFailedError(problem)
+        request = services.requirements.get_change_request(run.agent, change_request_id)
+        preamble = (
+            f"Approved design change request {request.cr_id}: {request.title}\n"
+            f"  Reason: {request.reason}\n  Change: {request.change}\n  Impact: {request.impact}\n"
+            f"  Design items to change: {', '.join(request.affected_item_ids) or 'none'}\n"
+            f"  New items allowed: {'yes' if request.allows_new_items else 'no'}\n"
+            f"  Requirements these items satisfy: {', '.join(request.impacted_requirements) or 'none'}\n\n"
+        )
+        return self._prepare(services, run, definition, preamble=preamble, extras={"change_request": request})
+
+    def check(self, output: DraftDesignOutput, prepared: PreparedPrompt) -> list[Finding]:  # type: ignore[override]
+        findings = super().check(output, prepared)
+        request = prepared.extras["change_request"]
+        violations = design_change_violations(request, prepared.extras["current_design"], output.items)
+        return findings + [Finding("change_control", "block", f"{request.cr_id}: {problem}", ref) for ref, problem in violations]

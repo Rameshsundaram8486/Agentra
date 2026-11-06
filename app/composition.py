@@ -228,15 +228,17 @@ class Services:
             self.artifacts,
             self.decisions,
             self.projects,
-            self.policies.approvals.change_requests.required_roles,
+            {baseline: self.policies.approvals.change_requests.roles_for(baseline) for baseline in self.policies.approvals.baselines},
             design_lookup=lambda project_id: self.design.coverage_by_requirement(project_id),
             backlog_lookup=lambda project_id: self.backlog.requirement_lookup(project_id),
+            design_change_target=lambda project_id: self.design.change_target(project_id),
+            design_backlog_lookup=lambda project_id: self.backlog.design_item_lookup(project_id),
         )
 
     @cached_property
     def design(self) -> DesignService:
         return DesignService(
-            self.session, self.clock, self.audit, self.identity, self.artifacts, self.decisions, self.projects, self.requirements
+            self.session, self.clock, self.audit, self.identity, self.artifacts, self.decisions, self.projects, self.requirements, self.workflow
         )
 
     @cached_property

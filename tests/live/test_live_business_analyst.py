@@ -290,3 +290,41 @@ def test_developer_plans_a_backlog_from_an_approved_design(
         print(f"- {item.item_id} [{item.epic_id}, {item.work_type}, {item.estimate}, wave {item.wave}] {item.title} -> {', '.join(item.design_items)}"
               + (f" after {', '.join(item.depends_on)}" if item.depends_on else ""))
     assert run(lambda s: s.backlog.gate_failures(team.project.id)) == ["Implementation backlog v1 is not approved"]
+
+
+def test_solution_architect_applies_a_design_change_request_within_its_items(
+    approved_design: Team, run: Callable[..., Any], test_settings: Settings, plan_backlog: Callable[..., Any],
+    session_factory: sessionmaker[Session], clock: FixedClock, policies: Policies, store: LocalArtifactStore,
+) -> None:
+    """One real call: an approved design change request to API-001 applied to a small scripted design."""
+    from app.modules.requirements.service import ChangeRequestCreate, ChangeRequestDecisionCreate
+
+    if test_settings.anthropic_api_key is None:
+        pytest.fail("ANTHROPIC_API_KEY is not set in .env")
+    live = AgentRunner(session_factory, clock, policies, store, ModelGateway(policies.models, AnthropicProvider(test_settings.anthropic_api_key.get_secret_value())))
+    team = approved_design
+    plan_backlog(team)
+    request = run(lambda s: s.requirements.raise_change_request(team.pm.actor, team.project.id, ChangeRequestCreate(
+        baseline_type="design_baseline", title="Scheduled reminders", reason="Event-triggered reminders proved unreliable in testing",
+        change="Send manager reminders from a scheduled flow that runs every working day at 08:00 and finds requests pending for two working days",
+        impact="One scheduled flow replaces the trigger", affected_item_ids=["API-001"])))
+    for approver in (team.owner, team.reviewer):
+        run(lambda s, a=approver: s.requirements.decide_change_request(a.actor, request.id, ChangeRequestDecisionCreate(decision="approved")))
+    print(f"\n{request.cr_id}: impacts {request.impacted_requirements} and {request.impacted_work_items}")
+
+    requirements = run(lambda s: s.requirements.view(team.owner.actor, team.project.id)).version_id
+    data = AgentRunCreate(agent_key="solution_architect", task_key="apply_design_change", artifact_version_id=requirements, change_request_id=request.id)
+    queued = run(lambda s: s.executions.request_run(team.pm.actor, team.project.id, data)).run
+    live.handle(ClaimedJob(uuid.uuid4(), "agent_run", {"agent_run_id": str(queued.id)}, "live", 1))
+    detail = run(lambda s: s.executions.get_run(team.owner.actor, queued.id))
+    call = detail.model_calls[0] if detail.model_calls else None
+    print(f"apply_design_change: status={detail.status} cost=${detail.cost_usd} out_tokens={call.output_tokens if call else '-'} latency={call.latency_ms if call else '-'}ms")
+    for finding in detail.findings:
+        print(f"  finding: {finding.severity} {finding.check} {finding.path}: {finding.message}")
+    assert detail.status == "succeeded", f"{detail.error_code}: {detail.error_message}"
+
+    design = run(lambda s: s.design.view(team.owner.actor, team.project.id))
+    api = next(i for i in design.items if i.item_id == "API-001")
+    print(f"design v{design.version_no} ({design.change_request}): {len(design.items)} items; API-001 now: {api.description[:300]}")
+    assert design.version_no == 2 and design.change_request == "CR-001: Scheduled reminders"
+    assert run(lambda s: s.backlog.view(team.owner.actor, team.project.id)).stale

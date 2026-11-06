@@ -93,6 +93,7 @@ class DesignDraft(BaseModel):
     input_refs: list[str]
     change_summary: str
     review_responses: list[ReviewResponse] = Field(default_factory=list)
+    change_request_id: uuid.UUID | None = Field(default=None, description="The approved design change request it applies")
 
 
 class DesignItemView(BaseModel):
@@ -145,6 +146,7 @@ class DesignView(BaseModel):
     added: list[str]
     removed: list[str]
     review_responses: list[ReviewResponse]
+    change_request: str | None = Field(default=None, description="The design change request this version applies, e.g. CR-002: title")
     exceptions: list[RequirementException]
     coverage: Coverage
     items: list[DesignItemView]

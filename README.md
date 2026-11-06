@@ -2,7 +2,7 @@
 
 AI-native operating platform for an IT services company. Specialised agents do bounded work, a workflow engine owns state, and humans approve consequential decisions against exact artifact versions.
 
-> **Status: Increment 4c done: implementation backlog and Phase 8 reports; Phase 8 is complete except design change requests (4d).** Working so far:
+> **Status: Increment 4d done: design change requests; Phase 8 (solution architecture and technical design) is complete.** Working so far:
 > - sign-in with server sessions
 > - projects and role-based memberships
 > - a workflow engine driven by YAML lifecycles, with entry and exit gates, optimistic locking and a record of every transition
@@ -28,6 +28,7 @@ AI-native operating platform for an IT services company. Specialised agents do b
 > - the Solution Architect agent: compares solution options (scored by the agent, totalled by Agentra) for people to choose, then drafts the solution design with stable IDs, unverified capabilities flagged, and every confirmed requirement covered or excepted; Phase 8 cannot complete otherwise, and a design goes stale when the approved requirements change
 > - security and feasibility reviews of each design version: the Security Reviewer agent answers a versioned security checklist and a reviewer signs the review off; the Developer agent rates each design item's feasibility. A design version can be approved only with a signed-off security review of that exact version, no high-severity gap and nothing rated not feasible; the Solution Architect's next draft must answer every gap and concern
 > - the implementation backlog: the Developer agent plans epics and work items from the approved design (server IDs, every buildable design item covered, requirement and acceptance-criteria links, sizes, dependencies without cycles, delivery waves); it goes stale when the design changes, and Phase 8 completes only with an approved backlog of the current design. The traceability matrix gains a backlog column
+> - design change requests in the same change request register: raised against the approved design while Phase 8 is open, with the requirements and backlog work items they touch computed by Agentra, approved by an owner and a reviewer, and applied by the Solution Architect to the listed items only; the changed design is reviewed and approved again and the backlog replanned
 > - Phase 8 reports: a design summary (customers may see it; review outcomes as counts only) and an internal detailed design pack with every finding, response, approval and agent run
 > - agent evals: synthetic cases for the Business Analyst agent, graded in code; recorded answers replay for free, and regressions against the committed baseline fail the run
 >

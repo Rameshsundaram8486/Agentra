@@ -116,7 +116,7 @@ class ExecutionsService:
             workflow_task = self._workflow.task_by_key(project_id, task.spec.phase, task.spec.workflow_task)
             if workflow_task is None:
                 raise ValidationFailedError(f"This project has no '{task.spec.workflow_task}' task in Phase {task.spec.phase}")
-            if workflow_task.state not in _START_PATHS:
+            if workflow_task.state not in _START_PATHS and not self._new_input_for_closed_task(workflow_task, record.id):
                 raise InvalidTransitionError(f"The '{workflow_task.title}' task is {workflow_task.state.replace('_', ' ')}")
 
         context = self._context_snapshot(actor, project_id, task)
@@ -164,7 +164,7 @@ class ExecutionsService:
             # Someone asked for the same thing at the same moment; theirs won.
             winner = next(r for r in repository.runs_for_input(self._session, task.agent_key, task.key, record.id) if r.status in _ACTIVE)
             return RunRequestResult(run=self._views([winner])[0], created=False)
-        if workflow_task is not None:
+        if workflow_task is not None and workflow_task.state in _START_PATHS:
             # Why Agentra may send a task waiting for review back itself: comments or findings to answer, or a new
             # version of what the task works from (for example a redrafted design to review again).
             system_reason = None
@@ -230,7 +230,8 @@ class ExecutionsService:
         task = self._registry.task(run.agent_key, run.task_key)
         blockers = ["this agent task no longer exists"] if task is None else self._readiness(run.project_id, task)[1]
         if run.task_id is not None and (current := self._workflow.task_view(run.task_id)).state != "in_progress":
-            blockers.append(f"the '{current.title}' task is now {current.state.replace('_', ' ')}")
+            if not self._new_input_for_closed_task(current, run.input_artifact_version_id):
+                blockers.append(f"the '{current.title}' task is now {current.state.replace('_', ' ')}")
         if blockers:
             self._session.flush()
             self.finish_run(run.id, status="blocked", error_code="precondition", error_message="; ".join(blockers))
@@ -475,6 +476,15 @@ class ExecutionsService:
                 str(record.id) for artifact_type in task.spec.context_findings_of for record in self._artifacts.current_records_of_type(project_id, artifact_type)
             ]
         return context
+
+    def _new_input_for_closed_task(self, task: TaskView, input_version_id: uuid.UUID) -> bool:
+        """A completed task may be asked again for a new version of what it works from (for example a design
+        changed by a design change request needs new reviews and a new backlog). The task stays completed; the
+        run is recorded against it, and the version-bound gates decide what counts."""
+        if task.state != "completed":
+            return False
+        done = [r for r in repository.runs_for_task(self._session, task.id) if r.status == "succeeded"]
+        return bool(done) and done[-1].input_artifact_version_id != input_version_id
 
     def _start_task(self, task: TaskView, reason: str, requester: Actor, agent: Actor, *, system_reason: str | None = None) -> None:
         """Moves the task to in_progress, each step as the requester, or as the agent where only it may. A task

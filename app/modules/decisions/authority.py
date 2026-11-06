@@ -34,7 +34,11 @@ class DecisionPolicy(BaseModel):
 class ChangeRequestPolicy(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    required_roles: tuple[str, ...]
+    required_roles: tuple[str, ...]  # for the requirements baseline, and any baseline not listed in by_baseline
+    by_baseline: dict[str, tuple[str, ...]] = {}
+
+    def roles_for(self, baseline_type: str) -> tuple[str, ...]:
+        return self.by_baseline.get(baseline_type, self.required_roles)
 
 
 class ApprovalMatrix(BaseModel):
@@ -55,12 +59,15 @@ class ApprovalMatrix(BaseModel):
                 raise ValueError(f"artifact type '{name}': approver roles must be human project roles")
         if not self.decisions.decider_roles or not self.decisions.decider_roles <= _HUMAN_ROLES:
             raise ValueError("decision decider roles must be human project roles")
-        roles = self.change_requests.required_roles
-        if not roles or not set(roles) <= _HUMAN_ROLES or len(set(roles)) != len(roles):
-            raise ValueError("change request required_roles must be distinct human project roles")
+        for roles in (self.change_requests.required_roles, *self.change_requests.by_baseline.values()):
+            if not roles or not set(roles) <= _HUMAN_ROLES or len(set(roles)) != len(roles):
+                raise ValueError("change request required_roles must be distinct human project roles")
         unknown = self.baselines - set(self.artifact_types)
         if unknown:
             raise ValueError(f"baselines name unknown artifact types {sorted(unknown)}")
+        unknown = set(self.change_requests.by_baseline) - self.baselines
+        if unknown:
+            raise ValueError(f"change_requests.by_baseline names types that are not baselines: {sorted(unknown)}")
         return self
 
     def artifact_type(self, name: str) -> ArtifactTypePolicy | None:
