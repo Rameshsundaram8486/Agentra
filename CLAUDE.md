@@ -26,3 +26,4 @@
 
 ## Stack
 Python 3.12+, FastAPI, SQLAlchemy + Alembic, PostgreSQL (+ pgvector), pytest. Plain HTML/CSS/JS in `web/`. No Docker in the first iteration; local sandbox VMs use Hyper-V.
+Exception: the simulated Command Center demo in `HTML/` is React + TypeScript (Vite); see `docs/adr/0005-command-center-demo-frontend.md`.

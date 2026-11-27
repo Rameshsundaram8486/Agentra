@@ -1,0 +1,166 @@
+/* Agentra Command Center demo: design tokens and base styles.
+   Colours are tokens (CSS variables) switched by data-theme on <html>; components use the Tailwind names
+   mapped below (bg-surface, text-fg, border-line ...) and never hard-code a colour. */
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b1020;
+  --surface-0: #0d1328; /* shell: sidebar and top bar */
+  --surface: #111833; /* panels */
+  --surface-2: #172042; /* raised, hover */
+  --surface-3: #1e2a55; /* selected, pressed */
+  --line: rgb(148 163 209 / 0.14);
+  --line-strong: rgb(148 163 209 / 0.26);
+  --fg: #e6eaf5;
+  --fg-muted: #a7b0ca;
+  --fg-subtle: #8690ad;
+  --primary: #3b82f6;
+  --primary-strong: #60a5fa;
+  --primary-fg: #ffffff;
+  --cyan: #22d3ee;
+  --violet: #a78bfa;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --neutral: #94a3b8;
+  --primary-soft: rgb(59 130 246 / 0.16);
+  --cyan-soft: rgb(34 211 238 / 0.14);
+  --violet-soft: rgb(139 92 246 / 0.18);
+  --success-soft: rgb(16 185 129 / 0.16);
+  --warning-soft: rgb(245 158 11 / 0.16);
+  --danger-soft: rgb(239 68 68 / 0.16);
+  --neutral-soft: rgb(148 163 184 / 0.14);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.28);
+  --chart-grid: rgb(148 163 209 / 0.12);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f6fb;
+  --surface-0: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f1f4fa;
+  --surface-3: #e5ebf6;
+  --line: rgb(15 23 42 / 0.1);
+  --line-strong: rgb(15 23 42 / 0.18);
+  --fg: #0f172a;
+  --fg-muted: #475569;
+  --fg-subtle: #5b6578;
+  --primary: #2563eb;
+  --primary-strong: #1d4ed8;
+  --primary-fg: #ffffff;
+  --cyan: #0e7490;
+  --violet: #6d28d9;
+  --success: #047857;
+  --warning: #b45309;
+  --danger: #b91c1c;
+  --neutral: #64748b;
+  --primary-soft: rgb(37 99 235 / 0.1);
+  --cyan-soft: rgb(8 145 178 / 0.1);
+  --violet-soft: rgb(124 58 237 / 0.1);
+  --success-soft: rgb(5 150 105 / 0.1);
+  --warning-soft: rgb(217 119 6 / 0.12);
+  --danger-soft: rgb(220 38 38 / 0.1);
+  --neutral-soft: rgb(100 116 139 / 0.1);
+  --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px rgb(15 23 42 / 0.08);
+  --chart-grid: rgb(15 23 42 / 0.08);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --color-bg: var(--bg);
+  --color-shell: var(--surface-0);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-fg: var(--primary-fg);
+  --color-cyan: var(--cyan);
+  --color-violet: var(--violet);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-neutral: var(--neutral);
+  --color-primary-soft: var(--primary-soft);
+  --color-cyan-soft: var(--cyan-soft);
+  --color-violet-soft: var(--violet-soft);
+  --color-success-soft: var(--success-soft);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger-soft: var(--danger-soft);
+  --color-neutral-soft: var(--neutral-soft);
+  --shadow-panel: var(--shadow);
+  --radius-panel: 12px;
+  --text-2xs: 11px;
+  --text-2xs--line-height: 16px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary-strong);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--primary-soft);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.live-pulse {
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

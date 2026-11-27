@@ -20,6 +20,11 @@ var/
 logs/
 *.vhdx
 
+# Command Center demo (HTML/): dependencies and build output
+HTML/node_modules/
+HTML/dist/
+HTML/test-results/
+
 # Editors / OS
 .vscode/
 .idea/
