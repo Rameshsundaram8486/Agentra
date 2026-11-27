@@ -121,7 +121,7 @@ async function main() {
         await send("Page.navigate", { url: `${base}/?theme=${theme}#${route}` });
         await waitFor(`document.documentElement.dataset.theme === '${theme}' && document.querySelector('#root')?.children.length > 0`, `${route} in ${theme}`);
         if (live) {
-          await evaluate("[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Start')?.click(), true");
+          await evaluate("[...document.querySelectorAll('button')].find((b) => /^Start/.test(b.textContent.trim()))?.click(), true");
           await sleep(9000); // nine simulation ticks
         } else {
           await sleep(600);

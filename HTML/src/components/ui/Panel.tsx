@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import { useId, type HTMLAttributes, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "./cn";
 
@@ -13,14 +13,15 @@ interface PanelProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
 
 /** The standard surface: a titled section with optional actions. */
 export function Panel({ title, subtitle, icon: Icon, actions, flush, className, children, ...props }: PanelProps) {
+  const titleId = useId();
   return (
-    <section className={cn("flex min-w-0 flex-col rounded-[var(--radius-panel)] border border-line bg-surface shadow-panel", className)} {...props}>
+    <section aria-labelledby={title ? titleId : undefined} className={cn("flex min-w-0 flex-col rounded-[var(--radius-panel)] border border-line bg-surface shadow-panel", className)} {...props}>
       {(title || actions) && (
         <header className="flex min-h-12 items-center justify-between gap-3 border-b border-line px-4 py-2.5">
           <div className="flex min-w-0 items-center gap-2.5">
             {Icon && <Icon className="size-4 shrink-0 text-fg-subtle" aria-hidden />}
             <div className="min-w-0">
-              {title && <h2 className="truncate text-sm font-semibold text-fg">{title}</h2>}
+              {title && <h2 id={titleId} className="truncate text-sm font-semibold text-fg">{title}</h2>}
               {subtitle && <p className="truncate text-xs text-fg-subtle">{subtitle}</p>}
             </div>
           </div>

@@ -10,10 +10,15 @@ export interface Column<T> {
   sortValue?: (row: T) => string | number; // makes the column sortable
   align?: "left" | "right";
   width?: string;
-  hideBelow?: "md" | "lg" | "xl"; // drop low-priority columns on narrow screens
+  hideBelow?: "md" | "lg" | "xl" | "2xl"; // drop low-priority columns on narrow screens
 }
 
-const HIDE: Record<NonNullable<Column<unknown>["hideBelow"]>, string> = { md: "hidden md:table-cell", lg: "hidden lg:table-cell", xl: "hidden xl:table-cell" };
+const HIDE: Record<NonNullable<Column<unknown>["hideBelow"]>, string> = {
+  md: "hidden md:table-cell",
+  lg: "hidden lg:table-cell",
+  xl: "hidden xl:table-cell",
+  "2xl": "hidden 2xl:table-cell",
+};
 
 /** The standard table: sortable columns, row selection by click or Enter, an empty state. */
 export function DataTable<T>({

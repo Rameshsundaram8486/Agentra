@@ -6,6 +6,8 @@ import { createSeedWorld } from "@/data/seed";
 import { useDemo } from "@/store/useDemo";
 import { useUi } from "@/store/useUi";
 
+const BUILT = ["command"]; // pages built so far; the rest show their placeholder
+
 beforeEach(() => {
   useDemo.setState({ world: createSeedWorld(), role: "owner", theme: "dark" });
   useUi.setState({ sidebarCollapsed: false, foldedGroups: [], mobileNavOpen: false, paletteOpen: false });
@@ -30,7 +32,7 @@ describe("the application shell", () => {
       const link = within(sidebar()).getByRole("link", { name: new RegExp(`^${item.label}`) });
       fireEvent.click(link);
       expect(screen.getByRole("heading", { level: 1, name: item.label })).toBeInTheDocument();
-      expect(screen.getAllByText(`Arrives in Stage ${item.stage}`).length).toBeGreaterThan(0);
+      if (!BUILT.includes(item.id)) expect(screen.getAllByText(`Arrives in Stage ${item.stage}`).length).toBeGreaterThan(0);
       expect(within(sidebar()).getByRole("link", { name: new RegExp(`^${item.label}`) })).toHaveAttribute("aria-current", "page");
     }
   }, 30_000); // renders all 33 pages
