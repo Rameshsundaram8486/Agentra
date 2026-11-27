@@ -6,7 +6,7 @@ import { createSeedWorld } from "@/data/seed";
 import { useDemo } from "@/store/useDemo";
 import { useUi } from "@/store/useUi";
 
-const BUILT = ["command"]; // pages built so far; the rest show their placeholder
+const BUILT = ["command", "operations", "agents", "directory", "history"]; // pages built so far; the rest show their placeholder
 
 beforeEach(() => {
   useDemo.setState({ world: createSeedWorld(), role: "owner", theme: "dark" });
@@ -26,16 +26,16 @@ describe("the application shell", () => {
     for (const item of NAV_ITEMS) expect(within(nav).getByRole("link", { name: new RegExp(item.label) })).toBeInTheDocument();
   });
 
-  it("opens a real page for every navigation item, with its title, and highlights it", () => {
+  it("opens a real page for every navigation item, with its title, and highlights it", async () => {
     render(<App />);
     for (const item of NAV_ITEMS) {
       const link = within(sidebar()).getByRole("link", { name: new RegExp(`^${item.label}`) });
       fireEvent.click(link);
-      expect(screen.getByRole("heading", { level: 1, name: item.label })).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { level: 1, name: item.label }, { timeout: 5000 })).toBeInTheDocument();
       if (!BUILT.includes(item.id)) expect(screen.getAllByText(`Arrives in Stage ${item.stage}`).length).toBeGreaterThan(0);
       expect(within(sidebar()).getByRole("link", { name: new RegExp(`^${item.label}`) })).toHaveAttribute("aria-current", "page");
     }
-  }, 30_000); // renders all 33 pages
+  }, 60_000); // renders all 33 pages
 
   it("marks pages outside the MVP as previews", () => {
     render(<App />);

@@ -141,6 +141,16 @@ body {
   scrollbar-color: var(--line-strong) transparent;
 }
 
+/* React Flow draws on the page's own surfaces. */
+.react-flow,
+.react-flow.dark,
+.react-flow.light {
+  --xy-background-color: transparent;
+  --xy-background-color-default: transparent;
+  --xy-edge-label-background-color: var(--bg);
+  --xy-attribution-background-color: transparent;
+}
+
 @keyframes live-pulse {
   0%,
   100% {

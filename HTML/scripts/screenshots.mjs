@@ -121,7 +121,12 @@ async function main() {
         await send("Page.navigate", { url: `${base}/?theme=${theme}#${route}` });
         await waitFor(`document.documentElement.dataset.theme === '${theme}' && document.querySelector('#root')?.children.length > 0`, `${route} in ${theme}`);
         if (live) {
-          await evaluate("[...document.querySelectorAll('button')].find((b) => /^Start/.test(b.textContent.trim()))?.click(), true");
+          // Start the simulation from the demo controls in the top bar (every page has them).
+          await evaluate("document.querySelector('[aria-label^=\"Simulation paused\"]')?.click(), true");
+          await sleep(400);
+          await evaluate("[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Start simulation')?.click(), true");
+          await sleep(300);
+          await evaluate("document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })), true");
           await sleep(9000); // nine simulation ticks
         } else {
           await sleep(600);
@@ -130,7 +135,13 @@ async function main() {
           await evaluate(`(${action}, true)`);
           await sleep(700);
         }
-        const { data } = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: !action });
+        if (!action) {
+          // Grow the window to the whole page, so sticky bars stay at the top of a full-page shot.
+          const full = await evaluate("Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)");
+          await send("Emulation.setDeviceMetricsOverride", { width, height: Math.max(height, full), deviceScaleFactor: 1, mobile: false });
+          await sleep(500);
+        }
+        const { data } = await send("Page.captureScreenshot", { format: "png" });
         const stem = route.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "home";
         const name = `${stem}${action ? `-action${index}` : ""}-${theme}-${width}.png`;
         writeFileSync(join(outDir, name), Buffer.from(data, "base64"));
