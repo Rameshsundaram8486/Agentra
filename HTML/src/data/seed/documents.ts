@@ -98,4 +98,5 @@ export const AUDIT: AuditEntry[] = [
   { id: "au-3", at: at(-26), actor: "a-po", action: "decision.raise", target: "DEC-006", detail: "Escalation: cut-over date" },
   { id: "au-2", at: day(-5), actor: "u-rania", action: "decision.outcome", target: "DEC-012", detail: "Rejected" },
   { id: "au-1", at: day(-18), actor: "u-rania", action: "decision.outcome", target: "DEC-010", detail: "Something else: SPMT with a ShareGate trial" },
+  { id: "au-10", at: day(-22), actor: "u-sara", action: "decision.outcome", target: "DEC-011", detail: "Deferred to phase 2" },
 ];

@@ -261,6 +261,10 @@ export interface RootCause {
   correctiveAction: string;
   ownerId: string;
   verification: string;
+  causeConfirmedBy?: string; // a person confirmed the probable cause; until then it is a hypothesis
+  causeConfirmedAt?: ISODate;
+  verifiedBy?: string; // a person checked the verification criteria before closing
+  verifiedAt?: ISODate;
 }
 
 export interface Incident {

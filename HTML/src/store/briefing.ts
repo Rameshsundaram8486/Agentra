@@ -1,6 +1,7 @@
 /* The Project Owner Agent's briefing, derived from the records on every change. Findings are facts read from records;
    recommended actions and priorities are the agent's proposals for people to decide, and are labelled as such. */
 import type { Decision, Risk, Role, World } from "@/types";
+import { ROLE_LABELS } from "./actions";
 import { byId, isOverdue, OPEN_INCIDENT, openDecisions, priorityRank, projectHealth, riskScore } from "./selectors";
 
 export type BriefingStatus = "healthy" | "watch" | "critical";
@@ -70,7 +71,7 @@ export function briefing(world: World): Briefing {
     ...waiting
       .filter((d) => !isOverdue(d, world.now) && (d.priority === "critical" || d.priority === "high") && !d.blockedBy)
       .slice(0, 3)
-      .map((d) => ({ text: `Review ${d.code}: ${d.title}`, basis: `${d.priority} priority, waiting for ${d.allowedRoles.join(" or ")}`, owner: d.allowedRoles[0]!, link: `/decisions?id=${d.id}` })),
+      .map((d) => ({ text: `Review ${d.code}: ${d.title}`, basis: `${d.priority} priority, waiting for ${d.allowedRoles.map((r) => ROLE_LABELS[r].toLowerCase()).join(" or ")}`, owner: d.allowedRoles[0]!, link: `/decisions?id=${d.id}` })),
   ];
 
   const escalations = waiting.filter((d) => d.kind === "escalation");

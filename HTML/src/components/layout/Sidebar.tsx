@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { ChevronDown, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { NavLink, useLocation } from "react-router";
-import { NAVIGATION, type NavItem } from "@/app/navigation";
+import { NAVIGATION, NAV_ITEMS, type NavItem } from "@/app/navigation";
 import { CountBadge, Tag } from "@/components/ui/Badge";
 import { cn } from "@/components/ui/cn";
 import { Tooltip } from "@/components/ui/Overlays";
@@ -33,7 +33,7 @@ function Item({ item, collapsed, onNavigate }: { item: NavItem; collapsed: boole
   const link = (
     <NavLink
       to={item.path}
-      end={item.path === "/"}
+      end={item.path === "/" || NAV_ITEMS.some((other) => other.path.startsWith(`${item.path}/`))} // a parent path is active only on itself
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(

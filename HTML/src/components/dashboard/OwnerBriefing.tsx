@@ -15,7 +15,7 @@ import { briefing, type Briefing, type BriefingStatus, type Finding } from "@/st
 import { byId, riskLevel, riskScore } from "@/store/selectors";
 import type { World } from "@/types";
 
-const STATUS: Record<BriefingStatus, { label: string; tone: Tone }> = {
+export const STATUS: Record<BriefingStatus, { label: string; tone: Tone }> = {
   healthy: { label: "Healthy", tone: "success" },
   watch: { label: "Needs watching", tone: "warning" },
   critical: { label: "Needs action", tone: "danger" },
@@ -23,7 +23,7 @@ const STATUS: Record<BriefingStatus, { label: string; tone: Tone }> = {
 
 const FINDING_TONE: Record<Finding["severity"], Tone> = { critical: "danger", warning: "warning", info: "primary" };
 
-function ScoreRing({ score, status }: { score: number; status: BriefingStatus }) {
+export function ScoreRing({ score, status }: { score: number; status: BriefingStatus }) {
   const tone = STATUS[status].tone;
   const circumference = 2 * Math.PI * 30;
   return (
@@ -40,7 +40,7 @@ function ScoreRing({ score, status }: { score: number; status: BriefingStatus })
   );
 }
 
-function SourceTag({ kind }: { kind: "record" | "ai" }) {
+export function SourceTag({ kind }: { kind: "record" | "ai" }) {
   return kind === "record" ? (
     <Tag tone="neutral" icon={Database} title="Read from recorded workflow data">From records</Tag>
   ) : (
@@ -48,7 +48,7 @@ function SourceTag({ kind }: { kind: "record" | "ai" }) {
   );
 }
 
-function FindingRow({ finding }: { finding: Finding }) {
+export function FindingRow({ finding }: { finding: Finding }) {
   return (
     <li>
       <Link to={finding.link} className="group flex items-start gap-2 rounded-md px-1.5 py-1 hover:bg-surface-2">

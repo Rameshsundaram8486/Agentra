@@ -24,6 +24,12 @@ const DecisionCenter = named(() => import("@/pages/Decisions"), "DecisionCenter"
 const ApprovalInbox = named(() => import("@/pages/Decisions"), "ApprovalInbox");
 const Recommendations = named(() => import("@/pages/Decisions"), "Recommendations");
 const Escalations = named(() => import("@/pages/Decisions"), "Escalations");
+const ProjectOwnerAgent = named(() => import("@/pages/Oversight"), "ProjectOwnerAgent");
+const ProjectHealth = named(() => import("@/pages/Oversight"), "ProjectHealth");
+const RiskCompliance = named(() => import("@/pages/Oversight"), "RiskCompliance");
+const CompanyPerformance = named(() => import("@/pages/Analytics"), "CompanyPerformance");
+const AgentPerformance = named(() => import("@/pages/Analytics"), "AgentPerformance");
+const Reports = named(() => import("@/pages/Analytics"), "Reports");
 const lifecycle = (name: "Lifecycle" | "RequirementsWorkspace" | "ArchitectureWorkspace" | "DevelopmentWorkspace" | "QaWorkspace" | "UatWorkspace" | "ReleasesWorkspace" | "SalesWorkspace" | "DiscoveryWorkspace" | "ProposalsWorkspace" | "CommercialWorkspace") =>
   named(() => import("@/pages/Lifecycle"), name);
 
@@ -53,6 +59,12 @@ const PAGES: Record<string, ComponentType | LazyExoticComponent<ComponentType>> 
   approvals: ApprovalInbox,
   recommendations: Recommendations,
   escalations: Escalations,
+  owner: ProjectOwnerAgent,
+  health: ProjectHealth,
+  risk: RiskCompliance,
+  performance: CompanyPerformance,
+  "agent-performance": AgentPerformance,
+  reports: Reports,
 };
 
 function Loading() {

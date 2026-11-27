@@ -10,7 +10,7 @@ import { useUi } from "@/store/useUi";
 const BUILT = [
   "command", "operations", "agents", "directory", "history", "projects", "pipeline", "board", "milestones", "lifecycle",
   "requirements", "architecture", "development", "qa", "uat", "releases", "sales", "discovery", "proposals", "commercial",
-  "decisions", "approvals", "recommendations", "escalations",
+  "decisions", "approvals", "recommendations", "escalations", "owner", "health", "risk", "performance", "agent-performance", "reports",
 ];
 
 beforeEach(() => {
@@ -36,11 +36,13 @@ describe("the application shell", () => {
     for (const item of NAV_ITEMS) {
       const link = within(sidebar()).getByRole("link", { name: new RegExp(`^${item.label}`) });
       fireEvent.click(link);
-      expect(await screen.findByRole("heading", { level: 1, name: item.label }, { timeout: 5000 })).toBeInTheDocument();
+      // Pages load on first use; under a full parallel test run the first load of a page bundle can take a while.
+      expect(await screen.findByRole("heading", { level: 1, name: item.label }, { timeout: 15_000 })).toBeInTheDocument();
       if (!BUILT.includes(item.id)) expect(screen.getAllByText(`Arrives in Stage ${item.stage}`).length).toBeGreaterThan(0);
       expect(within(sidebar()).getByRole("link", { name: new RegExp(`^${item.label}`) })).toHaveAttribute("aria-current", "page");
+      expect(within(sidebar()).getAllByRole("link", { current: "page" })).toHaveLength(1); // a parent path is not highlighted with its child
     }
-  }, 60_000); // renders all 33 pages
+  }, 180_000); // renders all 33 pages
 
   it("marks pages outside the MVP as previews", () => {
     render(<App />);

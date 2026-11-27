@@ -174,3 +174,31 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Printing a report ("Print or save as PDF"): only the report preview is printed, on white. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  [data-print-root],
+  [data-print-root] * {
+    visibility: visible;
+  }
+  [data-print-root] {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
+  [data-print-root] * {
+    color: #111 !important;
+    background: transparent !important;
+    border-color: #ccc !important;
+  }
+  [data-print-hide] {
+    display: none !important;
+  }
+}

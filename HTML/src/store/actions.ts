@@ -2,7 +2,7 @@
    with the reason a person may not do it. The same rules as the real Agentra apply in the demo: only the listed
    roles decide, agents never approve, an approval waits until its evidence is in place (blockedBy), and the
    agent's recommendation is never overwritten. */
-import type { ActivityEvent, Decision, DecisionAction, DecisionOutcome, Role, Severity, World } from "@/types";
+import type { ActivityEvent, Decision, DecisionAction, DecisionOutcome, Incident, Risk, Role, Severity, World } from "@/types";
 import { addSeconds } from "@/data/time";
 import { actorName, byId, isOpenDecision } from "./selectors";
 
@@ -257,6 +257,64 @@ const DECISION_EFFECTS: Record<string, (world: World, decision: Decision) => voi
     if (agent.taskId === "t-p3") Object.assign(agent, { status: "idle", taskId: undefined, since: world.now });
   },
 };
+
+/* Incidents and risks -------------------------------------------------------------------------------- */
+
+export type IncidentCommand = "investigate" | "confirm_cause" | "resolve" | "close";
+
+/** Moves an incident through its root-cause workflow. Only owners and project managers do this; an agent proposes
+    the probable cause, but only a person confirms it, and only a person checks the verification and closes. */
+export function updateIncident(world: World, incidentId: string, command: IncidentCommand, personId: string, role: Role): World {
+  if (!CONTROLLERS.includes(role)) throw new DemoRuleError(`Only an owner or a project manager may update incidents; you are acting as ${ROLE_LABELS[role].toLowerCase()}`);
+  const incident = byId(world.incidents, incidentId);
+  if (!incident) throw new DemoRuleError("Incident not found");
+  const allowed: Record<IncidentCommand, Incident["status"][]> = { investigate: ["open"], confirm_cause: ["open", "investigating", "resolved"], resolve: ["investigating"], close: ["resolved"] };
+  if (!allowed[command].includes(incident.status)) {
+    const need = { investigate: "open", confirm_cause: "not closed", resolve: "under investigation", close: "resolved" }[command];
+    throw new DemoRuleError(`${incident.code} is ${incident.status}; it must be ${need} first`);
+  }
+  if (command === "confirm_cause" && incident.rca.causeConfirmedBy) throw new DemoRuleError(`The cause of ${incident.code} is already confirmed`);
+  if (command === "close" && !incident.rca.causeConfirmedBy) throw new DemoRuleError(`Confirm the probable cause of ${incident.code} before closing it; it is still a hypothesis`);
+  return mutate(world, (draft) => {
+    const target = byId(draft.incidents, incidentId)!;
+    const who = actorName(draft, personId);
+    const text = {
+      investigate: `${who} started investigating ${target.code}`,
+      confirm_cause: `${who} confirmed the probable cause of ${target.code}`,
+      resolve: `${who} marked ${target.code} resolved; verification pending`,
+      close: `${who} verified and closed ${target.code}: ${target.rca.verification}`,
+    }[command];
+    if (command === "investigate") target.status = "investigating";
+    if (command === "confirm_cause") Object.assign(target.rca, { causeConfirmedBy: personId, causeConfirmedAt: draft.now });
+    if (command === "resolve") target.status = "resolved";
+    if (command === "close") {
+      target.status = "closed";
+      Object.assign(target.rca, { verifiedBy: personId, verifiedAt: draft.now });
+    }
+    audit(draft, personId, `incident.${command}`, target.code, text);
+    logActivity(draft, command === "close" ? "success" : "info", text, { projectId: target.projectId, link: `/owner?incident=${target.id}` });
+  });
+}
+
+export type RiskCommand = "mitigate" | "close" | "reopen";
+
+/** Moves a risk between open, mitigating and closed. Only owners and project managers do this. */
+export function updateRisk(world: World, riskId: string, command: RiskCommand, personId: string, role: Role): World {
+  if (!CONTROLLERS.includes(role)) throw new DemoRuleError(`Only an owner or a project manager may update risks; you are acting as ${ROLE_LABELS[role].toLowerCase()}`);
+  const risk = byId(world.risks, riskId);
+  if (!risk) throw new DemoRuleError("Risk not found");
+  const allowed: Record<RiskCommand, Risk["status"][]> = { mitigate: ["open"], close: ["mitigating"], reopen: ["closed", "mitigating"] };
+  if (!allowed[command].includes(risk.status)) {
+    throw new DemoRuleError(command === "close" ? `Start mitigating ${risk.code} before closing it` : `${risk.code} is already ${risk.status}`);
+  }
+  return mutate(world, (draft) => {
+    const target = byId(draft.risks, riskId)!;
+    target.status = { mitigate: "mitigating", close: "closed", reopen: "open" }[command] as Risk["status"];
+    const text = `${actorName(draft, personId)} ${command === "mitigate" ? "started mitigating" : command === "close" ? "closed" : "reopened"} ${target.code}: ${target.title}`;
+    audit(draft, personId, `risk.${command}`, target.code, text);
+    logActivity(draft, command === "reopen" ? "warning" : "info", text, { projectId: target.projectId, link: "/risk" });
+  });
+}
 
 /* Notifications and executions ---------------------------------------------------------------------- */
 

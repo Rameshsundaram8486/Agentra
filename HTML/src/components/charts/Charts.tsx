@@ -159,3 +159,26 @@ export function LifecycleStrip({ world }: { world: World }) {
     </div>
   );
 }
+
+/** Horizontal bars as plain elements: readable by screen readers as a list, themed by tokens, no chart library. */
+export function BarList({ items, max, unit = "", label }: { items: { key: string; label: string; value: number; tone?: keyof typeof TONE_DOT; hint?: string; to?: string }[]; max?: number; unit?: string; label: string }) {
+  const top = max ?? Math.max(1, ...items.map((i) => i.value));
+  return (
+    <ul aria-label={label} className="space-y-2">
+      {items.map((item) => {
+        const body = (
+          <>
+            <div className="flex items-baseline justify-between gap-2 text-xs">
+              <span className="truncate text-fg">{item.label}</span>
+              <span className="shrink-0 font-medium tabular">{item.value}{unit}{item.hint && <span className="ml-1 font-normal text-fg-subtle">{item.hint}</span>}</span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-3" aria-hidden>
+              <div className={cn("h-full rounded-full", TONE_DOT[item.tone ?? "primary"])} style={{ width: `${Math.min(100, (item.value / top) * 100)}%` }} />
+            </div>
+          </>
+        );
+        return <li key={item.key}>{item.to ? <Link to={item.to} className="block rounded-md px-1 py-0.5 hover:bg-surface-2">{body}</Link> : <div className="px-1 py-0.5">{body}</div>}</li>;
+      })}
+    </ul>
+  );
+}

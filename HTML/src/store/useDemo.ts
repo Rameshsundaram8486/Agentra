@@ -5,7 +5,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { Role, World } from "@/types";
 import { createSeedWorld, WORLD_VERSION } from "@/data/seed";
 import { advance } from "@/simulation/engine";
-import { controlExecution, decide, markNotificationsRead, mutate, type DecisionInput } from "./actions";
+import { controlExecution, decide, markNotificationsRead, mutate, updateIncident, updateRisk, type DecisionInput, type IncidentCommand, type RiskCommand } from "./actions";
 import { safeStorage } from "./safeStorage";
 
 export type Theme = "dark" | "light";
@@ -27,6 +27,8 @@ interface DemoState {
   decide: (input: Omit<DecisionInput, "personId" | "role">) => void;
   controlExecution: (executionId: string, command: "pause" | "resume" | "retry") => void;
   markRead: (ids?: string[]) => void;
+  updateIncident: (incidentId: string, command: IncidentCommand) => void;
+  updateRisk: (riskId: string, command: RiskCommand) => void;
   startSimulation: () => void;
   pauseSimulation: () => void;
   setSpeed: (speed: World["sim"]["speed"]) => void;
@@ -46,6 +48,8 @@ export const useDemo = create<DemoState>()(
       controlExecution: (executionId, command) =>
         set({ world: controlExecution(get().world, executionId, command, ROLE_PEOPLE[get().role], get().role) }),
       markRead: (ids) => set({ world: markNotificationsRead(get().world, ids) }),
+      updateIncident: (incidentId, command) => set({ world: updateIncident(get().world, incidentId, command, ROLE_PEOPLE[get().role], get().role) }),
+      updateRisk: (riskId, command) => set({ world: updateRisk(get().world, riskId, command, ROLE_PEOPLE[get().role], get().role) }),
       startSimulation: () => set({ world: mutate(get().world, (w) => void (w.sim.running = true)) }),
       pauseSimulation: () => set({ world: mutate(get().world, (w) => void (w.sim.running = false)) }),
       setSpeed: (speed) => set({ world: mutate(get().world, (w) => void (w.sim.speed = speed)) }),

@@ -74,7 +74,11 @@ export function invariantProblems(world: World): string[] {
   }
 
   for (const risk of world.risks) if (!projects.has(risk.projectId)) problems.push(`${risk.code}: unknown project`);
-  for (const incident of world.incidents) if (!projects.has(incident.projectId)) problems.push(`${incident.code}: unknown project`);
+  for (const incident of world.incidents) {
+    if (!projects.has(incident.projectId)) problems.push(`${incident.code}: unknown project`);
+    if (incident.status === "closed" && !(incident.rca.causeConfirmedBy && incident.rca.verifiedBy)) problems.push(`${incident.code}: closed without a confirmed cause and a verification`);
+    for (const by of [incident.rca.causeConfirmedBy, incident.rca.verifiedBy]) if (by && !people.has(by)) problems.push(`${incident.code}: confirmed or verified by someone who is not a person`);
+  }
   for (const artifact of world.artifacts) {
     if (!projects.has(artifact.projectId)) problems.push(`${artifact.id}: unknown project`);
     const numbers = artifact.versions.map((v) => v.no);
