@@ -15,6 +15,13 @@ const AgentControlCenter = named(() => import("@/pages/Agents"), "AgentControlCe
 const AgentDirectory = named(() => import("@/pages/Agents"), "AgentDirectory");
 const ExecutionHistory = named(() => import("@/pages/Agents"), "ExecutionHistory");
 const Gallery = named(() => import("@/pages/Gallery"), "Gallery");
+const Projects = named(() => import("@/pages/Projects"), "Projects");
+const Pipeline = named(() => import("@/pages/Projects"), "Pipeline");
+const DeliveryBoard = named(() => import("@/pages/Projects"), "DeliveryBoard");
+const Milestones = named(() => import("@/pages/Projects"), "Milestones");
+const ProjectWorkspace = named(() => import("@/pages/ProjectWorkspace"), "ProjectWorkspace");
+const lifecycle = (name: "Lifecycle" | "RequirementsWorkspace" | "ArchitectureWorkspace" | "DevelopmentWorkspace" | "QaWorkspace" | "UatWorkspace" | "ReleasesWorkspace" | "SalesWorkspace" | "DiscoveryWorkspace" | "ProposalsWorkspace" | "CommercialWorkspace") =>
+  named(() => import("@/pages/Lifecycle"), name);
 
 /** Built pages by navigation id; the rest show their placeholder until their stage. */
 const PAGES: Record<string, ComponentType | LazyExoticComponent<ComponentType>> = {
@@ -23,6 +30,21 @@ const PAGES: Record<string, ComponentType | LazyExoticComponent<ComponentType>> 
   agents: AgentControlCenter,
   directory: AgentDirectory,
   history: ExecutionHistory,
+  projects: Projects,
+  pipeline: Pipeline,
+  board: DeliveryBoard,
+  milestones: Milestones,
+  lifecycle: lifecycle("Lifecycle"),
+  requirements: lifecycle("RequirementsWorkspace"),
+  architecture: lifecycle("ArchitectureWorkspace"),
+  development: lifecycle("DevelopmentWorkspace"),
+  qa: lifecycle("QaWorkspace"),
+  uat: lifecycle("UatWorkspace"),
+  releases: lifecycle("ReleasesWorkspace"),
+  sales: lifecycle("SalesWorkspace"),
+  discovery: lifecycle("DiscoveryWorkspace"),
+  proposals: lifecycle("ProposalsWorkspace"),
+  commercial: lifecycle("CommercialWorkspace"),
 };
 
 function Loading() {
@@ -49,7 +71,7 @@ export function App() {
                 const Page = PAGES[item.id];
                 return <Route key={item.id} path={item.path} element={Page ? <Suspense fallback={<Loading />}><Page /></Suspense> : <Placeholder item={item} />} />;
               })}
-              <Route path="/projects/:projectId" element={<Placeholder />} />
+              <Route path="/projects/:projectId" element={<Suspense fallback={<Loading />}><ProjectWorkspace /></Suspense>} />
               <Route path="/design-system" element={<Suspense fallback={<Loading />}><Gallery /></Suspense>} />
               <Route path="*" element={<Placeholder />} />
             </Route>

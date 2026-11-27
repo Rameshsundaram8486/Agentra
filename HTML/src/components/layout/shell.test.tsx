@@ -6,7 +6,11 @@ import { createSeedWorld } from "@/data/seed";
 import { useDemo } from "@/store/useDemo";
 import { useUi } from "@/store/useUi";
 
-const BUILT = ["command", "operations", "agents", "directory", "history"]; // pages built so far; the rest show their placeholder
+// Pages built so far; the rest show their placeholder.
+const BUILT = [
+  "command", "operations", "agents", "directory", "history", "projects", "pipeline", "board", "milestones", "lifecycle",
+  "requirements", "architecture", "development", "qa", "uat", "releases", "sales", "discovery", "proposals", "commercial",
+];
 
 beforeEach(() => {
   useDemo.setState({ world: createSeedWorld(), role: "owner", theme: "dark" });
