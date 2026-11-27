@@ -2,7 +2,8 @@
    with the reason a person may not do it. The same rules as the real Agentra apply in the demo: only the listed
    roles decide, agents never approve, an approval waits until its evidence is in place (blockedBy), and the
    agent's recommendation is never overwritten. */
-import type { ActivityEvent, Decision, DecisionAction, DecisionOutcome, Incident, Risk, Role, Severity, World } from "@/types";
+import type { ActivityEvent, Autonomy, Decision, DecisionAction, DecisionOutcome, Incident, Risk, Role, Severity, World } from "@/types";
+import { actionsFor, AUTONOMY_RANK, MAX_FOR_RISK } from "@/data/seed/platform";
 import { addSeconds } from "@/data/time";
 import { actorName, byId, isOpenDecision } from "./selectors";
 
@@ -262,10 +263,15 @@ const DECISION_EFFECTS: Record<string, (world: World, decision: Decision) => voi
 
 export type IncidentCommand = "investigate" | "confirm_cause" | "resolve" | "close";
 
-/** Moves an incident through its root-cause workflow. Only owners and project managers do this; an agent proposes
-    the probable cause, but only a person confirms it, and only a person checks the verification and closes. */
+/** Moves an incident through its root-cause workflow, under config/policies/permissions.yaml and incident_rules.yaml:
+    owners and project managers investigate, confirm the cause and resolve (incident.manage); owners and reviewers
+    verify and close (incident.close), and never the person who resolved it. An agent proposes the probable cause;
+    only a person confirms it. */
 export function updateIncident(world: World, incidentId: string, command: IncidentCommand, personId: string, role: Role): World {
-  if (!CONTROLLERS.includes(role)) throw new DemoRuleError(`Only an owner or a project manager may update incidents; you are acting as ${ROLE_LABELS[role].toLowerCase()}`);
+  const may: Role[] = command === "close" ? ["owner", "reviewer"] : CONTROLLERS;
+  if (!may.includes(role)) {
+    throw new DemoRuleError(`Only an owner or a ${command === "close" ? "reviewer" : "project manager"} may ${command === "close" ? "verify and close" : "update"} incidents; you are acting as ${ROLE_LABELS[role].toLowerCase()}`);
+  }
   const incident = byId(world.incidents, incidentId);
   if (!incident) throw new DemoRuleError("Incident not found");
   const allowed: Record<IncidentCommand, Incident["status"][]> = { investigate: ["open"], confirm_cause: ["open", "investigating", "resolved"], resolve: ["investigating"], close: ["resolved"] };
@@ -275,6 +281,7 @@ export function updateIncident(world: World, incidentId: string, command: Incide
   }
   if (command === "confirm_cause" && incident.rca.causeConfirmedBy) throw new DemoRuleError(`The cause of ${incident.code} is already confirmed`);
   if (command === "close" && !incident.rca.causeConfirmedBy) throw new DemoRuleError(`Confirm the probable cause of ${incident.code} before closing it; it is still a hypothesis`);
+  if (command === "close" && incident.rca.resolvedBy === personId) throw new DemoRuleError(`${actorName(world, personId)} resolved ${incident.code}, so someone else must verify and close it`);
   return mutate(world, (draft) => {
     const target = byId(draft.incidents, incidentId)!;
     const who = actorName(draft, personId);
@@ -286,7 +293,10 @@ export function updateIncident(world: World, incidentId: string, command: Incide
     }[command];
     if (command === "investigate") target.status = "investigating";
     if (command === "confirm_cause") Object.assign(target.rca, { causeConfirmedBy: personId, causeConfirmedAt: draft.now });
-    if (command === "resolve") target.status = "resolved";
+    if (command === "resolve") {
+      target.status = "resolved";
+      target.rca.resolvedBy = personId;
+    }
     if (command === "close") {
       target.status = "closed";
       Object.assign(target.rca, { verifiedBy: personId, verifiedAt: draft.now });
@@ -314,6 +324,61 @@ export function updateRisk(world: World, riskId: string, command: RiskCommand, p
     audit(draft, personId, `risk.${command}`, target.code, text);
     logActivity(draft, command === "reopen" ? "warning" : "info", text, { projectId: target.projectId, link: "/risk" });
   });
+}
+
+/* Platform administration ---------------------------------------------------------------------------- */
+
+const ADMIN: Role[] = ["owner"]; // platform administration (user.manage) is the owner's in the demo
+
+function requireAdmin(role: Role, what: string): void {
+  if (!ADMIN.includes(role)) throw new DemoRuleError(`Only the owner may ${what}; you are acting as ${ROLE_LABELS[role].toLowerCase()}`);
+}
+
+/** Checks or syncs an integration (simulated: nothing leaves the browser). */
+export function integrationCommand(world: World, integrationId: string, command: "check" | "sync", personId: string, role: Role): World {
+  requireAdmin(role, command === "check" ? "test connections" : "start a sync");
+  const integration = byId(world.integrations, integrationId);
+  if (!integration) throw new DemoRuleError("Integration not found");
+  if (integration.status === "planned" || integration.status === "not_connected") throw new DemoRuleError(`${integration.name} is ${integration.status === "planned" ? "planned" : "not connected"}; there is nothing to ${command === "check" ? "test" : "sync"}`);
+  if (command === "sync" && !integration.syncs) throw new DemoRuleError(`${integration.name} has nothing to sync`);
+  return mutate(world, (draft) => {
+    const target = byId(draft.integrations, integrationId)!;
+    target.lastCheckAt = draft.now;
+    if (command === "sync") target.lastSyncAt = draft.now;
+    const text = command === "check"
+      ? `${actorName(draft, personId)} tested the ${target.name} connection: ${target.status === "warning" ? `connected, with a warning (${target.authStatus})` : "connected"} (simulated)`
+      : `${actorName(draft, personId)} synced ${target.name} (simulated)`;
+    audit(draft, personId, `integration.${command}`, target.name, text);
+    logActivity(draft, target.status === "warning" ? "warning" : "info", text, { link: "/admin/integrations" });
+  });
+}
+
+/** Sets one agent action's autonomy level. Only the owner changes agent definitions; an action may never go above the
+    level its risk class allows, and every change is a new version of the agent's definition, recorded in the audit. */
+export function setAutonomy(world: World, typeKey: string, actionKey: string, level: Autonomy, personId: string, role: Role): World {
+  requireAdmin(role, "change agent autonomy");
+  const type = world.agentTypes.find((t) => t.key === typeKey);
+  const action = type && actionsFor(typeKey, type.autonomy).find((a) => a.key === actionKey);
+  if (!type || !action) throw new DemoRuleError("Agent action not found");
+  const id = `${typeKey}.${actionKey}`;
+  const current = world.settings.autonomy[id] ?? action.autonomy;
+  if (current === level) throw new DemoRuleError(`"${action.title}" is already ${level}`);
+  const max = MAX_FOR_RISK[action.risk];
+  if (AUTONOMY_RANK[level] > AUTONOMY_RANK[max]) throw new DemoRuleError(`"${action.title}" is a ${action.risk}-risk action; it may be at most ${max}`);
+  if (level === "conditional" && !action.condition) throw new DemoRuleError(`"${action.title}" has no approved precondition, so it cannot be conditional`);
+  return mutate(world, (draft) => {
+    const version = (draft.settings.configVersions[typeKey] ?? 1) + 1;
+    draft.settings.autonomy[id] = level;
+    draft.settings.configVersions[typeKey] = version;
+    const text = `config/agents/${typeKey}/agent.yaml v${version - 1} → v${version}: "${action.title}" ${current} → ${level}`;
+    audit(draft, personId, "agent_config.autonomy", type.name, text);
+    logActivity(draft, "info", `${actorName(draft, personId)} changed "${action.title}" (${type.name}) to ${level}`, { link: `/admin/agents?agent=${typeKey}` });
+  });
+}
+
+/** A person's own notification preference. */
+export function setNotification(world: World, role: Role, key: string, on: boolean): World {
+  return mutate(world, (draft) => void (draft.settings.notifications[`${role}.${key}`] = on));
 }
 
 /* Notifications and executions ---------------------------------------------------------------------- */

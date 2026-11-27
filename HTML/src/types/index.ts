@@ -261,6 +261,7 @@ export interface RootCause {
   correctiveAction: string;
   ownerId: string;
   verification: string;
+  resolvedBy?: string; // who marked it resolved; someone else must verify and close it
   causeConfirmedBy?: string; // a person confirmed the probable cause; until then it is a hypothesis
   causeConfirmedAt?: ISODate;
   verifiedBy?: string; // a person checked the verification criteria before closing
@@ -355,6 +356,32 @@ export interface AuditEntry {
   detail?: string;
 }
 
+/* Platform administration ------------------------------------------------------------------------------ */
+
+export type IntegrationStatus = "connected" | "warning" | "not_connected" | "planned";
+
+export interface Integration {
+  id: string;
+  name: string;
+  group: "Microsoft 365" | "Engineering" | "Model providers";
+  purpose: string;
+  status: IntegrationStatus;
+  auth: string; // how Agentra authenticates; secrets are never shown
+  authStatus: string;
+  scopes: string[];
+  config: [label: string, value: string][];
+  syncs: boolean; // has a "sync now"
+  lastSyncAt?: ISODate;
+  lastCheckAt?: ISODate;
+  note?: string;
+}
+
+export interface Settings {
+  autonomy: Record<string, Autonomy>; // "<agent type>.<action>" -> level
+  configVersions: Record<string, number>; // agent type -> version of its definition
+  notifications: Record<string, boolean>; // "<role>.<event>.<channel>" -> on
+}
+
 /* The whole demo ------------------------------------------------------------------------------------- */
 
 export interface SimulationState {
@@ -384,5 +411,7 @@ export interface World {
   activity: ActivityEvent[]; // newest first
   notifications: Notification[]; // newest first
   audit: AuditEntry[]; // newest first
+  integrations: Integration[];
+  settings: Settings;
   sim: SimulationState;
 }

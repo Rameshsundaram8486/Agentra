@@ -11,6 +11,7 @@ const BUILT = [
   "command", "operations", "agents", "directory", "history", "projects", "pipeline", "board", "milestones", "lifecycle",
   "requirements", "architecture", "development", "qa", "uat", "releases", "sales", "discovery", "proposals", "commercial",
   "decisions", "approvals", "recommendations", "escalations", "owner", "health", "risk", "performance", "agent-performance", "reports",
+  "knowledge", "integrations", "gateway", "agent-config", "workflow-config", "users", "settings",
 ];
 
 beforeEach(() => {

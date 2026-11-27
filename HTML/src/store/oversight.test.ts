@@ -6,20 +6,29 @@ import { complianceChecks, delays, failedRuns, healthSignals, stuckWork } from "
 import { byId } from "./selectors";
 
 const PM = ["u-omar", "project_manager"] as const;
+const REVIEWER = ["u-priya", "reviewer"] as const;
 
 describe("the root-cause workflow", () => {
   it("keeps the cause a hypothesis until a person confirms it, and closes only after verification", () => {
     let world = createSeedWorld();
-    expect(() => updateIncident(world, "inc-3", "close", ...PM)).toThrow(/must be resolved first/);
+    expect(() => updateIncident(world, "inc-3", "close", ...REVIEWER)).toThrow(/must be resolved first/);
     world = updateIncident(world, "inc-3", "resolve", ...PM);
-    expect(() => updateIncident(world, "inc-3", "close", ...PM)).toThrow(/Confirm the probable cause of INC-003 before closing it/);
+    expect(() => updateIncident(world, "inc-3", "close", ...REVIEWER)).toThrow(/Confirm the probable cause of INC-003 before closing it/);
     world = updateIncident(world, "inc-3", "confirm_cause", ...PM);
     expect(byId(world.incidents, "inc-3")!.rca).toMatchObject({ causeConfirmedBy: "u-omar" });
     expect(byId(world.incidents, "inc-3")!.rca.hypothesis).toContain("Eight parallel threads"); // the agent's text is kept
-    world = updateIncident(world, "inc-3", "close", ...PM);
-    expect(byId(world.incidents, "inc-3")).toMatchObject({ status: "closed", rca: { verifiedBy: "u-omar" } });
+    expect(() => updateIncident(world, "inc-3", "close", ...PM)).toThrow(/Only an owner or a reviewer may verify and close/);
+    expect(() => updateIncident(world, "inc-3", "close", "u-rania", "owner")).not.toThrow(); // someone other than the resolver
+    world = updateIncident(world, "inc-3", "close", ...REVIEWER);
+    expect(byId(world.incidents, "inc-3")).toMatchObject({ status: "closed", rca: { resolvedBy: "u-omar", verifiedBy: "u-priya" } });
     expect(world.audit[0]).toMatchObject({ action: "incident.close", target: "INC-003" });
     expect(invariantProblems(world)).toEqual([]);
+  });
+
+  it("the person who resolved an incident may not close it", () => {
+    let world = updateIncident(createSeedWorld(), "inc-3", "confirm_cause", "u-rania", "owner");
+    world = updateIncident(world, "inc-3", "resolve", "u-rania", "owner");
+    expect(() => updateIncident(world, "inc-3", "close", "u-rania", "owner")).toThrow(/Rania Al Mansoori resolved INC-003, so someone else must verify and close it/);
   });
 
   it("only owners and project managers update incidents and risks", () => {

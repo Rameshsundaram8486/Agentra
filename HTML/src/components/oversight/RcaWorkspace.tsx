@@ -102,8 +102,9 @@ export function RcaDetail({ world, incident }: { world: World; incident: Inciden
 
       <Block title="Verification criteria" icon={ShieldCheck} tone="plain" label={rca.verifiedBy ? <Tag tone="success" icon={CircleCheck}>Verified by {actorName(world, rca.verifiedBy)}</Tag> : <Tag>Not verified yet</Tag>}>
         {rca.verification}
+        {rca.resolvedBy && <p className="mt-2 text-2xs text-fg-subtle">Resolved by {actorName(world, rca.resolvedBy)}{rca.verifiedBy ? "" : "; someone else must verify and close it"}.</p>}
       </Block>
-      <p className="text-2xs text-fg-subtle">Acting as {ROLE_LABELS[role].toLowerCase()}. Owners and project managers update incidents; agents propose causes and actions, never close incidents.</p>
+      <p className="text-2xs text-fg-subtle">Acting as {ROLE_LABELS[role].toLowerCase()}. Owners and project managers investigate and resolve; owners and reviewers verify and close, never the person who resolved it. Agents propose causes and actions and never close incidents.</p>
     </div>
   );
 }

@@ -204,7 +204,7 @@ export const INCIDENTS: Incident[] = [
       containment: "None needed.",
       correctiveAction: "The prompt now lists only files that exist on main.",
       ownerId: "u-priya", verification: "Two later WI-002 runs passed the checks.",
-      causeConfirmedBy: "u-priya", causeConfirmedAt: at(-29), verifiedBy: "u-priya", verifiedAt: at(-27),
+      resolvedBy: "u-omar", causeConfirmedBy: "u-omar", causeConfirmedAt: at(-29), verifiedBy: "u-priya", verifiedAt: at(-27),
     },
   },
 ];

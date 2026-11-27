@@ -27,7 +27,7 @@ describe("the Project Owner Agent", () => {
     expect(screen.getByRole("region", { name: "Observed evidence" })).toHaveTextContent("Confirmed facts");
   });
 
-  it("lets a project manager confirm the cause, and refuses a reviewer", async () => {
+  it("lets a project manager confirm the cause and resolve, and a different person verify and close", async () => {
     act(() => useDemo.setState({ role: "reviewer" }));
     await go("#/owner?incident=inc-3", "Project Owner Agent");
     fireEvent.click(screen.getByRole("button", { name: "Confirm the cause" }));
@@ -37,7 +37,10 @@ describe("the Project Owner Agent", () => {
     expect(screen.getByRole("region", { name: "Probable cause" })).toHaveTextContent("Confirmed by Omar Siddiqui");
     fireEvent.click(screen.getByRole("button", { name: "Mark resolved" }));
     fireEvent.click(screen.getByRole("button", { name: "Verify and close" }));
-    expect(byId(useDemo.getState().world.incidents, "inc-3")!.status).toBe("closed");
+    expect(screen.getByRole("alert")).toHaveTextContent("Only an owner or a reviewer may verify and close incidents");
+    act(() => useDemo.setState({ role: "reviewer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Verify and close" }));
+    expect(byId(useDemo.getState().world.incidents, "inc-3")!.rca).toMatchObject({ resolvedBy: "u-omar", verifiedBy: "u-priya" });
   });
 });
 

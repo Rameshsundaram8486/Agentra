@@ -30,6 +30,13 @@ const RiskCompliance = named(() => import("@/pages/Oversight"), "RiskCompliance"
 const CompanyPerformance = named(() => import("@/pages/Analytics"), "CompanyPerformance");
 const AgentPerformance = named(() => import("@/pages/Analytics"), "AgentPerformance");
 const Reports = named(() => import("@/pages/Analytics"), "Reports");
+const KnowledgeBase = named(() => import("@/pages/Knowledge"), "KnowledgeBase");
+const Integrations = named(() => import("@/pages/Platform"), "Integrations");
+const ModelGateway = named(() => import("@/pages/Platform"), "ModelGateway");
+const AgentConfiguration = named(() => import("@/pages/Governance"), "AgentConfiguration");
+const WorkflowConfiguration = named(() => import("@/pages/Governance"), "WorkflowConfiguration");
+const UsersPermissions = named(() => import("@/pages/Governance"), "UsersPermissions");
+const SystemSettings = named(() => import("@/pages/Governance"), "SystemSettings");
 const lifecycle = (name: "Lifecycle" | "RequirementsWorkspace" | "ArchitectureWorkspace" | "DevelopmentWorkspace" | "QaWorkspace" | "UatWorkspace" | "ReleasesWorkspace" | "SalesWorkspace" | "DiscoveryWorkspace" | "ProposalsWorkspace" | "CommercialWorkspace") =>
   named(() => import("@/pages/Lifecycle"), name);
 
@@ -65,6 +72,13 @@ const PAGES: Record<string, ComponentType | LazyExoticComponent<ComponentType>> 
   performance: CompanyPerformance,
   "agent-performance": AgentPerformance,
   reports: Reports,
+  knowledge: KnowledgeBase,
+  integrations: Integrations,
+  gateway: ModelGateway,
+  "agent-config": AgentConfiguration,
+  "workflow-config": WorkflowConfiguration,
+  users: UsersPermissions,
+  settings: SystemSettings,
 };
 
 function Loading() {

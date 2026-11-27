@@ -30,7 +30,7 @@ export const AGENT_TYPES: AgentType[] = [
     description: "Compares solution options and drafts the design that covers every confirmed requirement.", tools: ["Requirements read", "Design write (draft)", "Decision requests"] },
   { key: "security_reviewer", name: "Security Reviewer Agent", category: "architecture", phases: [8], model: MODEL, effort: "high", autonomy: "supervised", inMvp: true,
     description: "Reviews each design version against the security checklist; a person signs the review off.", tools: ["Design read", "Security checklist"] },
-  { key: "developer", name: "Developer Agent", category: "development", phases: [8, 9], model: MODEL, effort: "high", autonomy: "controlled", inMvp: true,
+  { key: "developer", name: "Developer Agent", category: "development", phases: [8, 9], model: MODEL, effort: "high", autonomy: "supervised", inMvp: true, // config/agents/developer/agent.yaml
     description: "Reviews feasibility, plans the backlog and implements work items as change sets in sandbox VMs.", tools: ["Repository read", "Change set write", "Sandbox VM (build and test)"] },
   { key: "qa_tester", name: "QA Agent", category: "qa", phases: [10], model: MODEL, effort: "high", autonomy: "controlled", inMvp: true,
     description: "Plans and runs tests in sandbox VMs, logs defects and retests fixes.", tools: ["Test plans", "Sandbox VM (test runs)", "Defect log"] },

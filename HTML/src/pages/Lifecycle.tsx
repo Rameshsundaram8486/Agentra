@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRight, Bot, FileText, GitBranch, Hand, Lightbulb, ShieldCheck, Workflow } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 import { NAV_ITEMS, phasePath } from "@/app/navigation";
+import { ReportLinks } from "@/components/dashboard/ReportLinks";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { gateState, LifecycleRail, portfolioPhase } from "@/components/lifecycle/LifecycleRail";
 import { PhaseContent, PreviewView } from "@/components/phases/PhaseViews";
@@ -181,7 +182,7 @@ export function PhaseWorkspace({ phase }: { phase: number }) {
             )}</Panel>
           </TabPanel>
           <TabPanel value="reports">
-            <Panel><EmptyState icon={FileText} title={`Phase ${phase} reports arrive in Stage 6`} hint="Executive and detailed reports built from these records, with preview and export." action={<Link to="/reports" className="text-[13px] text-primary-strong hover:underline">Reports and Analytics</Link>} /></Panel>
+            <ReportLinks projectId={project?.id} ids={phase === 10 ? ["qa", "defects", "workflow", "approvals"] : ["projects", "workflow", "approvals", "risks"]} title={`Reports for Phase ${phase}${project ? `, ${project.name}` : ""}`} />
           </TabPanel>
         </Tabs>
       )}

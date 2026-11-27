@@ -4,6 +4,7 @@
    without changing any screen. */
 import type { DecisionInput, IncidentCommand, RiskCommand } from "@/store/actions";
 import { useDemo } from "@/store/useDemo";
+import type { Autonomy } from "@/types";
 
 export interface DataService {
   readonly mode: "demo" | "api";
@@ -12,6 +13,9 @@ export interface DataService {
   markNotificationsRead(ids?: string[]): void;
   updateIncident(incidentId: string, command: IncidentCommand): void;
   updateRisk(riskId: string, command: RiskCommand): void;
+  integrationCommand(integrationId: string, command: "check" | "sync"): void;
+  setAutonomy(typeKey: string, actionKey: string, level: Autonomy): void;
+  setNotification(key: string, on: boolean): void;
 }
 
 export const demoDataService: DataService = {
@@ -21,6 +25,9 @@ export const demoDataService: DataService = {
   markNotificationsRead: (ids) => useDemo.getState().markRead(ids),
   updateIncident: (incidentId, command) => useDemo.getState().updateIncident(incidentId, command),
   updateRisk: (riskId, command) => useDemo.getState().updateRisk(riskId, command),
+  integrationCommand: (integrationId, command) => useDemo.getState().integrationCommand(integrationId, command),
+  setAutonomy: (typeKey, actionKey, level) => useDemo.getState().setAutonomy(typeKey, actionKey, level),
+  setNotification: (key, on) => useDemo.getState().setNotification(key, on),
 };
 
 export function useDataService(): DataService {

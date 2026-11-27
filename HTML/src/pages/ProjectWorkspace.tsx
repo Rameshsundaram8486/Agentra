@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CalendarClock, FileText, Flag, Hand, History, ShieldCheck, Users } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
+import { ReportLinks } from "@/components/dashboard/ReportLinks";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { LifecycleRail } from "@/components/lifecycle/LifecycleRail";
 import { PhaseContent } from "@/components/phases/PhaseViews";
@@ -212,7 +213,7 @@ export function ProjectWorkspace() {
         </TabPanel>
 
         <TabPanel value="reports">
-          <Panel><EmptyState icon={FileText} title="Project reports arrive in Stage 6" hint="The executive summary and the detailed report for this project, built only from these records, with preview and export." action={<Link to="/reports" className="text-[13px] text-primary-strong hover:underline">Reports and Analytics</Link>} /></Panel>
+          <ReportLinks projectId={project.id} title={`Reports for ${project.name}`} />
         </TabPanel>
       </Tabs>
     </div>

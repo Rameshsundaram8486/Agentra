@@ -77,6 +77,7 @@ export function invariantProblems(world: World): string[] {
   for (const incident of world.incidents) {
     if (!projects.has(incident.projectId)) problems.push(`${incident.code}: unknown project`);
     if (incident.status === "closed" && !(incident.rca.causeConfirmedBy && incident.rca.verifiedBy)) problems.push(`${incident.code}: closed without a confirmed cause and a verification`);
+    if (incident.rca.verifiedBy && incident.rca.verifiedBy === incident.rca.resolvedBy) problems.push(`${incident.code}: verified by the person who resolved it`);
     for (const by of [incident.rca.causeConfirmedBy, incident.rca.verifiedBy]) if (by && !people.has(by)) problems.push(`${incident.code}: confirmed or verified by someone who is not a person`);
   }
   for (const artifact of world.artifacts) {

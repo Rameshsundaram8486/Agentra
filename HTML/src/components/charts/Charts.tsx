@@ -162,6 +162,7 @@ export function LifecycleStrip({ world }: { world: World }) {
 
 /** Horizontal bars as plain elements: readable by screen readers as a list, themed by tokens, no chart library. */
 export function BarList({ items, max, unit = "", label }: { items: { key: string; label: string; value: number; tone?: keyof typeof TONE_DOT; hint?: string; to?: string }[]; max?: number; unit?: string; label: string }) {
+  const show = (n: number) => (Number.isInteger(n) ? n.toLocaleString("en-GB") : String(n));
   const top = max ?? Math.max(1, ...items.map((i) => i.value));
   return (
     <ul aria-label={label} className="space-y-2">
@@ -170,7 +171,7 @@ export function BarList({ items, max, unit = "", label }: { items: { key: string
           <>
             <div className="flex items-baseline justify-between gap-2 text-xs">
               <span className="truncate text-fg">{item.label}</span>
-              <span className="shrink-0 font-medium tabular">{item.value}{unit}{item.hint && <span className="ml-1 font-normal text-fg-subtle">{item.hint}</span>}</span>
+              <span className="shrink-0 font-medium tabular">{show(item.value)}{unit}{item.hint && <span className="ml-1 font-normal text-fg-subtle">{item.hint}</span>}</span>
             </div>
             <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-3" aria-hidden>
               <div className={cn("h-full rounded-full", TONE_DOT[item.tone ?? "primary"])} style={{ width: `${Math.min(100, (item.value / top) * 100)}%` }} />
@@ -180,5 +181,29 @@ export function BarList({ items, max, unit = "", label }: { items: { key: string
         return <li key={item.key}>{item.to ? <Link to={item.to} className="block rounded-md px-1 py-0.5 hover:bg-surface-2">{body}</Link> : <div className="px-1 py-0.5">{body}</div>}</li>;
       })}
     </ul>
+  );
+}
+
+/** Gateway latency, p50 and p95 by hour. */
+export function LatencyChart({ data }: { data: [hour: string, p50: number, p95: number][] }) {
+  const rows = data.map(([hour, p50, p95]) => ({ hour: `${hour}:00`, p50, p95 }));
+  const worst = rows.reduce((a, b) => (b.p95 > a.p95 ? b : a), rows[0]!);
+  return (
+    <div role="img" aria-label={`Latency p50 ${Math.min(...rows.map((r) => r.p50))} to ${Math.max(...rows.map((r) => r.p50))} seconds; p95 peaks at ${worst.p95} seconds at ${worst.hour}`} className="h-52">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={rows} margin={{ top: 6, right: 6, bottom: 0, left: -18 }}>
+          <CartesianGrid stroke="var(--line)" vertical={false} />
+          <XAxis dataKey="hour" tick={AXIS} tickLine={false} axisLine={false} interval={2} />
+          <YAxis tick={AXIS} tickLine={false} axisLine={false} unit=" s" width={48} />
+          <Tooltip {...TOOLTIP} formatter={(v) => `${v} s`} />
+          <Area type="monotone" dataKey="p95" name="p95" stroke={TONE_VAR.violet} fill={TONE_VAR.violet} fillOpacity={0.12} strokeWidth={2} isAnimationActive={false} />
+          <Area type="monotone" dataKey="p50" name="p50" stroke={TONE_VAR.cyan} fill={TONE_VAR.cyan} fillOpacity={0.15} strokeWidth={2} isAnimationActive={false} />
+        </AreaChart>
+      </ResponsiveContainer>
+      <div className="-mt-1 flex justify-end gap-3 text-2xs text-fg-subtle">
+        <span className="flex items-center gap-1"><span className={cn("size-2 rounded-sm", TONE_DOT.cyan)} aria-hidden />p50</span>
+        <span className="flex items-center gap-1"><span className={cn("size-2 rounded-sm", TONE_DOT.violet)} aria-hidden />p95</span>
+      </div>
+    </div>
   );
 }

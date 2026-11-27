@@ -9,8 +9,8 @@ function sha(): string {
   let value = (shaCounter * 2654435761) >>> 0;
   let out = "";
   for (let i = 0; i < 64; i++) {
-    value = (value * 1103515245 + 12345) >>> 0;
-    out += "0123456789abcdef"[value % 16];
+    value = (Math.imul(value, 1103515245) + 12345) >>> 0; // 32-bit multiply; a plain * loses the low bits
+    out += "0123456789abcdef"[(value >>> 16) & 15];
   }
   return out;
 }

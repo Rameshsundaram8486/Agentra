@@ -160,7 +160,7 @@ function download(fileName: string, text: string): void {
 export function Reports() {
   const world = useDemo((s) => s.world);
   const [params, setParams] = useSearchParams();
-  const [projectId, setProjectId] = useState("all");
+  const [projectId, setProjectId] = useState(() => params.get("project") ?? "all"); // a project's Reports tab links here with ?project=
   const action = useRuleAction();
   const report = REPORTS.find((r) => r.id === params.get("report")) ?? REPORTS[0]!;
   const body = report.build(world, report.projectFilter ? projectId : "all");

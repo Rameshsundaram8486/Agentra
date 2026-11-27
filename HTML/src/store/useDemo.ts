@@ -2,10 +2,10 @@
    browser so a refresh keeps the story; a version change or unreadable storage starts from the seed. */
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { Role, World } from "@/types";
+import type { Autonomy, Role, World } from "@/types";
 import { createSeedWorld, WORLD_VERSION } from "@/data/seed";
 import { advance } from "@/simulation/engine";
-import { controlExecution, decide, markNotificationsRead, mutate, updateIncident, updateRisk, type DecisionInput, type IncidentCommand, type RiskCommand } from "./actions";
+import { controlExecution, decide, integrationCommand, markNotificationsRead, mutate, setAutonomy, setNotification, updateIncident, updateRisk, type DecisionInput, type IncidentCommand, type RiskCommand } from "./actions";
 import { safeStorage } from "./safeStorage";
 
 export type Theme = "dark" | "light";
@@ -29,6 +29,9 @@ interface DemoState {
   markRead: (ids?: string[]) => void;
   updateIncident: (incidentId: string, command: IncidentCommand) => void;
   updateRisk: (riskId: string, command: RiskCommand) => void;
+  integrationCommand: (integrationId: string, command: "check" | "sync") => void;
+  setAutonomy: (typeKey: string, actionKey: string, level: Autonomy) => void;
+  setNotification: (key: string, on: boolean) => void;
   startSimulation: () => void;
   pauseSimulation: () => void;
   setSpeed: (speed: World["sim"]["speed"]) => void;
@@ -50,6 +53,9 @@ export const useDemo = create<DemoState>()(
       markRead: (ids) => set({ world: markNotificationsRead(get().world, ids) }),
       updateIncident: (incidentId, command) => set({ world: updateIncident(get().world, incidentId, command, ROLE_PEOPLE[get().role], get().role) }),
       updateRisk: (riskId, command) => set({ world: updateRisk(get().world, riskId, command, ROLE_PEOPLE[get().role], get().role) }),
+      integrationCommand: (integrationId, command) => set({ world: integrationCommand(get().world, integrationId, command, ROLE_PEOPLE[get().role], get().role) }),
+      setAutonomy: (typeKey, actionKey, level) => set({ world: setAutonomy(get().world, typeKey, actionKey, level, ROLE_PEOPLE[get().role], get().role) }),
+      setNotification: (key, on) => set({ world: setNotification(get().world, get().role, key, on) }),
       startSimulation: () => set({ world: mutate(get().world, (w) => void (w.sim.running = true)) }),
       pauseSimulation: () => set({ world: mutate(get().world, (w) => void (w.sim.running = false)) }),
       setSpeed: (speed) => set({ world: mutate(get().world, (w) => void (w.sim.speed = speed)) }),
