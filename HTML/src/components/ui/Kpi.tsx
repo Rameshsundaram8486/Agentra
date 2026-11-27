@@ -10,11 +10,12 @@ interface KpiProps {
   tone?: Tone;
   hint?: ReactNode; // the context that makes the number meaningful
   onClick?: () => void;
+  pressed?: boolean; // a clickable figure that acts as a filter
   className?: string;
 }
 
 /** A key figure with the context behind it. Clickable when it leads somewhere. */
-export function Kpi({ label, value, icon: Icon, tone = "primary", hint, onClick, className }: KpiProps) {
+export function Kpi({ label, value, icon: Icon, tone = "primary", hint, onClick, pressed, className }: KpiProps) {
   const body = (
     <>
       <div className="flex items-start justify-between gap-2">
@@ -29,7 +30,7 @@ export function Kpi({ label, value, icon: Icon, tone = "primary", hint, onClick,
   );
   const classes = cn("min-w-0 rounded-[var(--radius-panel)] border border-line bg-surface p-3.5 text-left shadow-panel", className);
   return onClick ? (
-    <button type="button" onClick={onClick} className={cn(classes, "transition-colors hover:border-line-strong hover:bg-surface-2")}>
+    <button type="button" onClick={onClick} aria-pressed={pressed} className={cn(classes, "transition-colors hover:border-line-strong hover:bg-surface-2", pressed && "border-primary ring-1 ring-primary/40")}>
       {body}
     </button>
   ) : (

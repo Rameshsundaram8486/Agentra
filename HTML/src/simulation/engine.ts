@@ -5,8 +5,8 @@
    again on every later tick, so nothing happens that depends on a decision nobody has made, or on a run a person
    paused. Everything is deterministic: the same ticks from the same world always give the same result. */
 import type { World } from "@/types";
-import { addSeconds, TICK_SECONDS } from "@/data/time";
-import { logActivity, mutate } from "@/store/actions";
+import { addSeconds, secondsBetween, TICK_SECONDS } from "@/data/time";
+import { answerClarification, logActivity, mutate } from "@/store/actions";
 import { agentType, byId } from "@/store/selectors";
 import { REACTIONS, TIMELINE, type ScenarioEvent } from "./scenario";
 
@@ -62,6 +62,17 @@ function finishRetried(world: World, executionId: string): void {
   logActivity(world, "success", `${agent?.name ?? name}: "${execution.title}" succeeded on retry`, { projectId: execution.projectId, agentId: execution.agentId });
 }
 
+/** Agents answer a question about their recommendation two ticks after it is asked. */
+const ANSWER_AFTER_TICKS = 2;
+
+function answerQuestions(world: World): void {
+  for (const decision of world.decisions) {
+    if (decision.status !== "clarification_requested") continue;
+    const asked = [...decision.history].reverse().find((e) => e.action === "clarify");
+    if (!asked || secondsBetween(asked.at, world.now) >= ANSWER_AFTER_TICKS * TICK_SECONDS) answerClarification(world, decision);
+  }
+}
+
 function fire(world: World, event: ScenarioEvent): void {
   event.apply(world);
   world.sim.done.push(event.id);
@@ -74,6 +85,7 @@ export function advance(world: World, ticks = 1, script: Script = SCRIPT): World
       draft.sim.elapsed += 1;
       draft.now = addSeconds(draft.now, TICK_SECONDS);
       heartbeat(draft);
+      answerQuestions(draft);
       // Timeline events that were waiting, and reactions, whose precondition now holds.
       for (const event of [...script.timeline.slice(0, draft.sim.cursor), ...script.reactions]) {
         if (!draft.sim.done.includes(event.id) && event.when?.(draft)) fire(draft, event);

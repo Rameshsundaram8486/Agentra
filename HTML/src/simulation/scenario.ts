@@ -2,7 +2,7 @@
    with a `when` precondition waits until it holds (typically a human decision), so the demo never shows work that
    depends on a decision nobody has made. Stage 7 extends the script; the engine stays the same. */
 import type { Decision, Execution, Task, World } from "@/types";
-import { logActivity, notify } from "@/store/actions";
+import { audit, logActivity, notify } from "@/store/actions";
 import { byId } from "@/store/selectors";
 import { secondsBetween, TICK_SECONDS } from "@/data/time";
 
@@ -75,6 +75,7 @@ function unblock(world: World, id: string, evidence: string, ref: string): void 
 
 function addDecision(world: World, decision: Omit<Decision, "createdAt" | "history" | "status">): void {
   world.decisions.push({ ...decision, createdAt: world.now, status: "pending", history: [{ at: world.now, actor: decision.originAgentId, action: "raised", summary: "Raised" }] });
+  audit(world, decision.originAgentId, "decision.raise", decision.code, decision.title);
 }
 
 function addVersion(world: World, artifactId: string, author: string, summary: string): void {
@@ -146,7 +147,7 @@ export const TIMELINE: ScenarioEvent[] = [
         versions: [{ no: 1, at: w.now, author: "a-dev1", summary: "First version", sha256: "4be1c07d9a2f6e3b8c5d1a0f7e9b2c4d6a8f0e1d3c5b7a9e2f4d6c8b0a1e3f5d", status: "in_review" }],
       });
       addDecision(w, {
-        id: "d-wi005", code: "DEC-013", projectId: "p-spo", phase: 9, kind: "approval", priority: "medium", title: "Approve change set WI-005 v1 (managed metadata)",
+        id: "d-wi005", taskId: "t-s5", artifactId: "doc-s-cs5", code: "DEC-013", projectId: "p-spo", phase: 9, kind: "approval", priority: "medium", title: "Approve change set WI-005 v1 (managed metadata)",
         question: "Approve the change set? It must pass its sandbox build and tests first.", originAgentId: "a-dev1", allowedRoles: ["reviewer"], deadline: w.now.replace(/T.*/, "T14:00:00.000Z"),
         options: [{ key: "approve", title: "Approve and merge", description: "Agentra merges it into main and completes WI-005.", pros: [], cons: [] }, { key: "changes", title: "Request changes", description: "Send it back with comments.", pros: [], cons: [] }],
         recommended: "approve", rationale: "All 14 mapping rules have tests; 2,140 of 2,140 terms map to a term set.", risks: ["The pilot migration waits for this and WI-004"],
@@ -216,7 +217,7 @@ export const REACTIONS: ScenarioEvent[] = [
       addVersion(w, "doc-w-brd", "a-ba", "38 requirements with the platform decision");
       byId(w.projects, "p-workflow")!.phases[6]!.progress = 70;
       addDecision(w, {
-        id: "d-brd", code: "DEC-014", projectId: "p-workflow", phase: 7, kind: "approval", priority: "high", title: "Approve the requirements baseline v2",
+        id: "d-brd", taskId: "t-w2", artifactId: "doc-w-brd", code: "DEC-014", projectId: "p-workflow", phase: 7, kind: "approval", priority: "high", title: "Approve the requirements baseline v2",
         question: "Approve requirements v2 as the baseline? Once approved it changes only through change requests.", originAgentId: "a-ba", allowedRoles: ["reviewer", "owner"], deadline: w.now.replace(/T.*/, "T15:00:00.000Z"),
         options: [{ key: "approve", title: "Approve the baseline", description: "Locks the requirements under change control.", pros: [], cons: [] }, { key: "changes", title: "Request changes", description: "Send it back with comments.", pros: [], cons: [] }],
         recommended: "approve", rationale: "All 38 requirements have acceptance criteria and sources; no open questions remain.", risks: [], evidence: [{ label: "Business requirements v2", ref: "BRD-v2" }],

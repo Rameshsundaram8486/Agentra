@@ -24,13 +24,19 @@ export function runsOf(world: World, agentId: string): Execution[] {
   return world.executions.filter((e) => e.agentId === agentId).sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
 }
 
-/** Work waiting to be picked up, waiting on other work, and waiting on people. */
+/** The open decision a task cannot start or finish without (an approval bound to it), if any. */
+export function gatingDecision(world: World, task: Task): Decision | undefined {
+  return world.decisions.find((d) => d.taskId === task.id && isOpenDecision(d));
+}
+
+/** Work waiting to be picked up, waiting on other work, and waiting on people (a review, an answer or a decision). */
 export function queues(world: World) {
   const done = (id: string) => world.tasks.find((t) => t.id === id)?.state === "completed";
   const open = world.tasks.filter((t) => t.state !== "completed" && t.state !== "cancelled");
-  const ready = open.filter((t) => (t.state === "ready" || t.state === "not_started") && t.dependsOn.every(done));
-  const waitingOnWork = open.filter((t) => t.state === "not_started" && !t.dependsOn.every(done));
-  const waitingOnPeople = open.filter((t) => t.state === "waiting_for_review" || t.state === "waiting_for_input");
+  const gated = (t: Task) => t.state === "not_started" && gatingDecision(world, t) !== undefined;
+  const ready = open.filter((t) => (t.state === "ready" || t.state === "not_started") && t.dependsOn.every(done) && !gated(t));
+  const waitingOnWork = open.filter((t) => t.state === "not_started" && !t.dependsOn.every(done) && !gated(t));
+  const waitingOnPeople = open.filter((t) => t.state === "waiting_for_review" || t.state === "waiting_for_input" || gated(t));
   return { ready, waitingOnWork, waitingOnPeople };
 }
 

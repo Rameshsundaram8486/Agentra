@@ -36,7 +36,7 @@ export const DECISIONS: Decision[] = [
     status: "pending", history: [{ at: at(-2.6), actor: "a-ba", action: "raised", summary: "Raised while drafting requirements v1" }],
   },
   {
-    id: "d-cr002", code: "DEC-003", projectId: "p-power", phase: 8, kind: "approval", priority: "high",
+    id: "d-cr002", taskId: "t-p6", code: "DEC-003", projectId: "p-power", phase: 8, kind: "approval", priority: "high",
     title: "Approve design change CR-002: scheduled referral reminders",
     question: "Replace event-triggered reminders with a scheduled flow that runs every working day at 08:00?",
     originAgentId: "a-sa", allowedRoles: ["owner", "reviewer"], createdAt: at(-20), deadline: day(1),
@@ -47,7 +47,7 @@ export const DECISIONS: Decision[] = [
     status: "pending", history: [{ at: at(-20), actor: "u-omar", action: "raised", summary: "Change request CR-002 raised by Omar Siddiqui" }],
   },
   {
-    id: "d-secreview", code: "DEC-004", projectId: "p-power", phase: 8, kind: "approval", priority: "high",
+    id: "d-secreview", taskId: "t-p3", artifactId: "doc-p-sec", code: "DEC-004", projectId: "p-power", phase: 8, kind: "approval", priority: "high",
     title: "Sign off the security review of design v2",
     question: "Sign off security review v2? It has no high-severity gaps and 2 medium gaps accepted with mitigations.",
     originAgentId: "a-sec", allowedRoles: ["reviewer"], createdAt: at(-1), deadline: day(1),
@@ -58,7 +58,7 @@ export const DECISIONS: Decision[] = [
     status: "pending", history: [{ at: at(-1), actor: "a-sec", action: "raised", summary: "Review of design v2 started" }],
   },
   {
-    id: "d-wi004", code: "DEC-005", projectId: "p-spo", phase: 9, kind: "approval", priority: "high",
+    id: "d-wi004", taskId: "t-s4", artifactId: "doc-s-cs4", code: "DEC-005", projectId: "p-spo", phase: 9, kind: "approval", priority: "high",
     title: "Approve change set WI-004 v2 (large-list handler)",
     question: "Approve the change set? It answers review comment REV-1 and must pass its sandbox build and tests first.",
     originAgentId: "a-dev2", allowedRoles: ["reviewer"], createdAt: at(-1.2), deadline: day(1),
@@ -97,7 +97,7 @@ export const DECISIONS: Decision[] = [
     status: "pending", history: [{ at: at(-3), actor: "a-qa1", action: "raised", summary: "Raised by the QA Agent after QA-06 failed" }],
   },
   {
-    id: "d-uat-signoff", code: "DEC-008", projectId: "p-spse", phase: 11, kind: "approval", priority: "high",
+    id: "d-uat-signoff", taskId: "t-u5", artifactId: "doc-u-signoff", code: "DEC-008", projectId: "p-spse", phase: 11, kind: "approval", priority: "high",
     title: "UAT sign-off: SharePoint Subscription Edition upgrade",
     question: "Accept the upgrade? 35 of 36 scenarios passed; UF-07 is proposed as a change request for later.",
     originAgentId: "a-uat", allowedRoles: ["customer_approver"], createdAt: at(-4), deadline: day(2),

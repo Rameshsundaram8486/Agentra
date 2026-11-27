@@ -63,54 +63,118 @@ const ACTION_STATUS: Record<DecisionAction, Decision["status"] | null> = {
   defer: "deferred",
   clarify: "clarification_requested",
   comment: null, // adds a suggestion without deciding
+  reopen: "pending",
 };
+
+/** Actions that settle a decision (the others ask, suggest, set aside or reopen it). */
+const SETTLING: DecisionAction[] = ["accept", "choose_option", "custom", "reject"];
 
 export function decide(world: World, input: DecisionInput): World {
   const decision = byId(world.decisions, input.decisionId);
   if (!decision) throw new DemoRuleError("Decision not found");
-  if (!isOpenDecision(decision)) throw new DemoRuleError(`${decision.code} is already ${decision.status.replace("_", " ")}`);
-  if (!decision.allowedRoles.includes(input.role)) {
+  let action = input.action;
+  // An approval is approved or sent back: choosing its other option ("Request changes") is a rejection.
+  if (decision.kind === "approval" && action === "choose_option" && input.optionKey && input.optionKey !== decision.recommended) action = "reject";
+  if (decision.kind === "approval" && action === "custom") {
+    throw new DemoRuleError("An approval is approved or sent back. To approve with conditions, accept it and add your constraints");
+  }
+  if (action === "reopen") {
+    if (decision.status !== "deferred") throw new DemoRuleError(`Only a deferred decision can be reopened; ${decision.code} is ${decision.status.replace("_", " ")}`);
+  } else if (!isOpenDecision(decision)) {
+    throw new DemoRuleError(`${decision.code} is already ${decision.status.replace("_", " ")}`);
+  }
+  // Anyone may add a suggestion; only the listed roles decide, ask, defer or reopen.
+  if (action !== "comment" && !decision.allowedRoles.includes(input.role)) {
     throw new DemoRuleError(`Only ${decision.allowedRoles.map((r) => ROLE_LABELS[r].toLowerCase()).join(" or ")} may decide ${decision.code}; you are acting as ${ROLE_LABELS[input.role].toLowerCase()}`);
   }
-  const deciding = input.action !== "comment" && input.action !== "clarify" && input.action !== "defer";
-  if (deciding && decision.blockedBy && input.action !== "reject") throw new DemoRuleError(`Cannot approve yet: ${decision.blockedBy}`);
+  if (SETTLING.includes(action) && decision.blockedBy) throw new DemoRuleError(`Cannot decide yet: ${decision.blockedBy}`);
   const comment = input.comment?.trim();
-  if ((input.action === "reject" || input.action === "clarify" || input.action === "comment") && !comment) {
-    throw new DemoRuleError("Add a comment explaining your reason or question");
+  if ((action === "reject" || action === "clarify" || action === "comment") && !comment) {
+    throw new DemoRuleError(action === "reject" ? "Add a comment explaining your reason" : action === "clarify" ? "Write your question for the agent" : "Write your suggestion");
   }
-  if (input.action === "custom" && !input.custom?.trim()) throw new DemoRuleError("Describe your own option");
-  if (input.action === "choose_option" && !decision.options.some((o) => o.key === input.optionKey)) throw new DemoRuleError("Choose one of the options");
+  if (action === "custom" && !input.custom?.trim()) throw new DemoRuleError("Describe your own option");
+  if (action === "choose_option" && !decision.options.some((o) => o.key === input.optionKey)) throw new DemoRuleError("Choose one of the options");
 
   return mutate(world, (draft) => {
     const target = byId(draft.decisions, decision.id)!;
     const who = actorName(draft, input.personId);
-    let status = ACTION_STATUS[input.action];
-    const accepted = input.action === "accept" ? target.recommended : input.optionKey;
-    if (input.action === "choose_option" && accepted !== target.recommended) status = "modified";
+    let status = ACTION_STATUS[action];
+    const accepted = action === "accept" ? target.recommended : action === "choose_option" ? input.optionKey : undefined;
+    if (action === "choose_option" && accepted !== target.recommended) status = "modified";
     const chosen = target.options.find((o) => o.key === accepted);
+    const sentBack = target.kind === "approval" && action === "reject";
     const summary =
-      input.action === "comment" ? `Suggested: ${comment}`
-      : input.action === "clarify" ? `Asked for clarification: ${comment}`
-      : input.action === "custom" ? `Chose their own option: ${input.custom!.trim()}`
-      : input.action === "reject" ? `Rejected the recommendation: ${comment}`
-      : input.action === "defer" ? `Deferred${comment ? `: ${comment}` : ""}`
+      action === "comment" ? `Suggested: ${comment}`
+      : action === "clarify" ? `Asked for clarification: ${comment}`
+      : action === "custom" ? `Chose their own option: ${input.custom!.trim()}`
+      : action === "reject" ? `${sentBack ? "Sent it back" : "Rejected the recommendation"}: ${comment}`
+      : action === "defer" ? `Deferred${comment ? `: ${comment}` : ""}`
+      : action === "reopen" ? `Reopened${comment ? `: ${comment}` : ""}`
       : `Chose "${chosen?.title}"${accepted === target.recommended ? " (the recommendation)" : " instead of the recommendation"}`;
-    target.history.push({ at: draft.now, actor: input.personId, action: input.action, summary });
+    target.history.push({ at: draft.now, actor: input.personId, action, summary });
     if (status) {
       target.status = status;
-      const outcome: DecisionOutcome = { action: input.action, by: input.personId, at: draft.now };
-      if (accepted) outcome.optionKey = accepted;
-      if (input.custom?.trim()) outcome.custom = input.custom.trim();
-      if (comment) outcome.comment = comment;
-      if (input.constraints?.trim()) outcome.constraints = input.constraints.trim();
-      if (status !== "clarification_requested") target.outcome = outcome;
+      if (action === "reopen") target.outcome = undefined;
+      else if (status !== "clarification_requested") {
+        const outcome: DecisionOutcome = { action, by: input.personId, at: draft.now };
+        if (accepted) outcome.optionKey = accepted;
+        if (input.custom?.trim()) outcome.custom = input.custom.trim();
+        if (comment) outcome.comment = comment;
+        if (input.constraints?.trim()) outcome.constraints = input.constraints.trim();
+        const artifact = byId(draft.artifacts, target.artifactId);
+        if (artifact && (status === "approved" || status === "modified")) {
+          const version = artifact.versions[artifact.versions.length - 1]!;
+          outcome.boundTo = { artifactId: artifact.id, version: version.no, sha256: version.sha256 };
+        }
+        target.outcome = outcome;
+      }
     }
-    audit(draft, input.personId, input.action === "comment" ? "decision.suggest" : "decision.outcome", target.code, summary);
+    const bound = target.outcome?.boundTo && SETTLING.includes(action) ? ` (bound to v${target.outcome.boundTo.version}, sha256 ${target.outcome.boundTo.sha256.slice(0, 12)}…)` : "";
+    const auditAction = action === "comment" ? "decision.suggest" : action === "clarify" ? "decision.clarify" : action === "reopen" ? "decision.reopen" : "decision.outcome";
+    audit(draft, input.personId, auditAction, target.code, summary + bound);
     const severity: Severity = status === "rejected" ? "warning" : status === "approved" || status === "modified" ? "success" : "info";
-    logActivity(draft, severity, `${who} ${summary.charAt(0).toLowerCase()}${summary.slice(1)} on ${target.code}: ${target.title}`, { projectId: target.projectId });
+    logActivity(draft, severity, `${who} ${summary.charAt(0).toLowerCase()}${summary.slice(1)} on ${target.code}: ${target.title}`, { projectId: target.projectId, link: `/decisions?id=${target.id}` });
     if (status === "approved" || status === "modified") DECISION_EFFECTS[target.id]?.(draft, target);
+    if (status === "rejected") sendBack(draft, target);
   });
 }
+
+/** A rejected approval returns the work to its agent: the version is marked for changes, the task reopens (or is
+    cancelled if it never started) and the agent is released. */
+function sendBack(world: World, decision: Decision): void {
+  if (decision.kind !== "approval") return;
+  const artifact = byId(world.artifacts, decision.artifactId);
+  if (artifact) Object.assign(artifact.versions[artifact.versions.length - 1]!, { status: "changes_requested", reviewedBy: decision.outcome?.by });
+  const task = byId(world.tasks, decision.taskId);
+  if (!task) return;
+  task.state = task.startedAt ? "changes_requested" : "cancelled";
+  for (const agent of world.agents) {
+    if (agent.taskId === task.id && agent.status === "waiting_approval") Object.assign(agent, { status: "idle", taskId: undefined, since: world.now });
+  }
+  const outcome = task.state === "cancelled" ? "cancelled" : "sent back for changes";
+  logActivity(world, "warning", `${task.key} ${outcome} after ${decision.code}`, { projectId: decision.projectId, agentId: task.agentId });
+}
+
+/** The agent that raised a decision answers a person's question about it; the decision is open again. */
+export function answerClarification(world: World, decision: Decision): void {
+  const question = [...decision.history].reverse().find((e) => e.action === "clarify");
+  const answer = CLARIFICATION_ANSWERS[decision.id] ?? `${decision.rationale} Evidence: ${decision.evidence.map((e) => e.ref).join(", ")}.`;
+  decision.history.push({ at: world.now, actor: decision.originAgentId, action: "answered", summary: answer });
+  decision.status = "pending";
+  const agent = actorName(world, decision.originAgentId);
+  audit(world, decision.originAgentId, "decision.answer", decision.code, answer);
+  logActivity(world, "info", `${agent} answered the question on ${decision.code}; it is waiting for a decision again`, { projectId: decision.projectId, agentId: decision.originAgentId, link: `/decisions?id=${decision.id}` });
+  notify(world, "info", `${decision.code} answered`, `${agent} answered the question from ${question ? actorName(world, question.actor) : "a reviewer"}.`, `/decisions?id=${decision.id}`);
+}
+
+/** Answers grounded in each decision's evidence; other decisions answer from their rationale and evidence. */
+const CLARIFICATION_ANSWERS: Record<string, string> = {
+  "d-platform": "Premium connectors are needed only for the 3 flows that call the property management system; the other 11 flows use standard connectors included in Microsoft 365 E3 (brief v2, section 3).",
+  "d-wi004": "The tests cover lists of 5,000, 50,000 and 250,000 items; the batch size is read from configuration (default 2,000), as REV-1 asked.",
+  "d-cutover": "24 December still leaves 3 working days before the customer's year-end freeze; extending the old farm licences costs about AED 4,500 (MTG-1104).",
+  "d-def014": "3 of 18 permission tests failed, all on HR libraries with unique permissions; the hotfix is about 1 day plus 1 day of retest (QA-06).",
+  "d-uat-signoff": "UF-07 asks for a new monthly storage report that is not in the approved requirements, so it is new scope, not a defect (UAT report v1).",
+};
 
 /** What a decided decision changes right away elsewhere in the world (follow-up work is scripted in the simulation). */
 const DECISION_EFFECTS: Record<string, (world: World, decision: Decision) => void> = {

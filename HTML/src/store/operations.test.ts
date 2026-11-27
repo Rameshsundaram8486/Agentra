@@ -17,9 +17,9 @@ describe("operational views", () => {
 
   it("separates work ready to start, work waiting on other work, and work waiting on people", () => {
     const q = queues(world);
-    expect(q.ready.map((t) => t.key).sort()).toEqual(["CR-002", "DEF-014"]);
+    expect(q.ready.map((t) => t.key).sort()).toEqual(["DEF-014"]); // CR-002 waits for its approval (DEC-003)
     expect(q.waitingOnWork.map((t) => t.key)).toEqual(expect.arrayContaining(["WI-006", "WI-007", "QA-09"]));
-    expect(q.waitingOnPeople.map((t) => t.key).sort()).toEqual(["BA-02", "SA-02", "UAT-05", "WI-004"]);
+    expect(q.waitingOnPeople.map((t) => t.key).sort()).toEqual(["BA-02", "CR-002", "SA-02", "UAT-05", "WI-004"]);
   });
 
   it("finds where work piles up", () => {

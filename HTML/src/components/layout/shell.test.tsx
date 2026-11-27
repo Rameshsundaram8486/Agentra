@@ -10,6 +10,7 @@ import { useUi } from "@/store/useUi";
 const BUILT = [
   "command", "operations", "agents", "directory", "history", "projects", "pipeline", "board", "milestones", "lifecycle",
   "requirements", "architecture", "development", "qa", "uat", "releases", "sales", "discovery", "proposals", "commercial",
+  "decisions", "approvals", "recommendations", "escalations",
 ];
 
 beforeEach(() => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSeedWorld } from "@/data/seed";
+import { advance } from "@/simulation/engine";
 import { invariantProblems } from "@/test/invariants";
 import { controlExecution, decide, DemoRuleError } from "./actions";
 import { byId, kpis, projectHealth } from "./selectors";
@@ -37,8 +38,9 @@ describe("human decisions", () => {
     expect(() => decide(createSeedWorld(), { decisionId: "d-wi004", action: "accept", ...PM })).toThrow(DemoRuleError);
   });
 
-  it("refuses an approval while its evidence is missing, but allows asking or rejecting", () => {
+  it("refuses to decide while the evidence is missing, but allows asking a question", () => {
     expect(() => decide(createSeedWorld(), { decisionId: "d-wi004", action: "accept", ...REVIEWER })).toThrow(/sandbox build and test run has not finished/);
+    expect(() => decide(createSeedWorld(), { decisionId: "d-wi004", action: "reject", comment: "No", ...REVIEWER })).toThrow(/Cannot decide yet/);
     const asked = decide(createSeedWorld(), { decisionId: "d-wi004", action: "clarify", comment: "Which list sizes were tested?", ...REVIEWER });
     expect(byId(asked.decisions, "d-wi004")!.status).toBe("clarification_requested");
     expect(byId(asked.decisions, "d-wi004")!.outcome).toBeUndefined();
@@ -68,6 +70,70 @@ describe("human decisions", () => {
     expect(project.phases[10]).toMatchObject({ state: "completed", gateApprovedBy: "u-daniel" });
     expect(project.phases[11]!.state).toBe("active");
     expect(invariantProblems(after)).toEqual([]);
+  });
+});
+
+describe("approvals", () => {
+  const ready = () => advance(createSeedWorld(), 9); // WI-004's sandbox run has passed
+
+  it("binds an approval to the exact version and sha256 approved", () => {
+    const after = decide(ready(), { decisionId: "d-wi004", action: "accept", ...REVIEWER });
+    const decision = byId(after.decisions, "d-wi004")!;
+    const version = byId(after.artifacts, "doc-s-cs4")!.versions.at(-1)!;
+    expect(decision.outcome!.boundTo).toEqual({ artifactId: "doc-s-cs4", version: 2, sha256: version.sha256 });
+    expect(after.audit[0]!.detail).toContain(`bound to v2, sha256 ${version.sha256.slice(0, 12)}`);
+    expect(invariantProblems(after)).toEqual([]);
+  });
+
+  it("choosing Request changes sends the work back to its agent instead of merging it", () => {
+    const after = decide(ready(), { decisionId: "d-wi004", action: "choose_option", optionKey: "changes", comment: "Add a test for 1 million items", ...REVIEWER });
+    expect(byId(after.decisions, "d-wi004")).toMatchObject({ status: "rejected", outcome: { action: "reject" } });
+    expect(byId(after.tasks, "t-s4")!.state).toBe("changes_requested");
+    expect(byId(after.artifacts, "doc-s-cs4")!.versions.at(-1)!.status).toBe("changes_requested");
+    expect(byId(after.agents, "a-dev2")).toMatchObject({ status: "idle", taskId: undefined });
+    expect(byId(after.decisions, "d-wi004")!.outcome!.boundTo).toBeUndefined();
+    expect(invariantProblems(after)).toEqual([]);
+  });
+
+  it("cancels work that never started when its approval is rejected", () => {
+    const after = decide(createSeedWorld(), { decisionId: "d-cr002", action: "reject", comment: "Keep the current design", ...OWNER });
+    expect(byId(after.tasks, "t-p6")!.state).toBe("cancelled");
+    expect(invariantProblems(after)).toEqual([]);
+  });
+
+  it("an approval cannot take a custom option", () => {
+    expect(() => decide(ready(), { decisionId: "d-wi004", action: "custom", custom: "Merge half", ...REVIEWER })).toThrow(/approved or sent back/);
+  });
+});
+
+describe("suggestions, deferral and questions", () => {
+  it("anyone may suggest, but only the listed roles decide", () => {
+    const suggested = decide(createSeedWorld(), { decisionId: "d-cutover", action: "comment", comment: "Tell the customer's finance team today", ...PM });
+    expect(byId(suggested.decisions, "d-cutover")!.history.at(-1)).toMatchObject({ actor: "u-omar", action: "comment" });
+    expect(() => decide(createSeedWorld(), { decisionId: "d-cutover", action: "comment", ...PM })).toThrow(/Write your suggestion/);
+  });
+
+  it("a deferred decision can be reopened by a decider, and is open again with no outcome", () => {
+    const deferred = decide(createSeedWorld(), { decisionId: "d-platform", action: "defer", comment: "After the licence review", ...OWNER });
+    expect(byId(deferred.decisions, "d-platform")!.status).toBe("deferred");
+    expect(() => decide(deferred, { decisionId: "d-platform", action: "reopen", ...REVIEWER })).toThrow(/Only owner or project manager/);
+    const reopened = decide(deferred, { decisionId: "d-platform", action: "reopen", ...OWNER });
+    expect(byId(reopened.decisions, "d-platform")).toMatchObject({ status: "pending", outcome: undefined });
+    expect(() => decide(createSeedWorld(), { decisionId: "d-platform", action: "reopen", ...OWNER })).toThrow(/Only a deferred decision/);
+    expect(invariantProblems(reopened)).toEqual([]);
+  });
+
+  it("the agent answers a question two ticks later and the decision is open again", () => {
+    const asked = decide(createSeedWorld(), { decisionId: "d-platform", action: "clarify", comment: "Which flows need premium connectors?", ...OWNER });
+    expect(byId(advance(asked, 1).decisions, "d-platform")!.status).toBe("clarification_requested");
+    const answered = advance(asked, 2);
+    const decision = byId(answered.decisions, "d-platform")!;
+    expect(decision.status).toBe("pending");
+    expect(decision.history.at(-1)).toMatchObject({ actor: "a-ba", action: "answered" });
+    expect(decision.history.at(-1)!.summary).toContain("3 flows");
+    expect(answered.notifications[0]!.title).toBe("DEC-001 answered");
+    expect(decision.recommended).toBe("spo");
+    expect(invariantProblems(answered)).toEqual([]);
   });
 });
 

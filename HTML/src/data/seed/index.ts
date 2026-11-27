@@ -7,7 +7,7 @@ import { DECISIONS, INCIDENTS, RISKS } from "./governance";
 import { CUSTOMERS, PEOPLE, PROJECTS } from "./projects";
 import { AGENTS, EXECUTIONS, TASKS } from "./work";
 
-export const WORLD_VERSION = 1;
+export const WORLD_VERSION = 2; // bump when the shape or the seed changes, so saved demos restart from the seed
 
 export function createSeedWorld(): World {
   // A deep copy, so resetting the demo never shares objects with a previous run.

@@ -144,3 +144,9 @@ export const NAV_ITEMS: NavItem[] = NAVIGATION.flatMap((g) => g.items);
 export function navItemFor(pathname: string): NavItem | undefined {
   return NAV_ITEMS.find((item) => item.path === pathname) ?? NAV_ITEMS.filter((i) => i.path !== "/" && pathname.startsWith(i.path)).sort((a, b) => b.path.length - a.path.length)[0];
 }
+
+/** The phase workspace for a phase (Phase 4 shares Commercial Operations with Phase 5; 6 and 13 have none yet). */
+export function phasePath(phase: number): string {
+  if (phase === 4) return "/business/commercial";
+  return NAV_ITEMS.find((i) => i.phase === phase)?.path ?? "/lifecycle";
+}

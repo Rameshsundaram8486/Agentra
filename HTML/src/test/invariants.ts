@@ -65,6 +65,12 @@ export function invariantProblems(world: World): string[] {
     const decided = ["approved", "modified", "rejected", "deferred"].includes(decision.status);
     if (decided && !decision.outcome) problems.push(`${decision.code}: ${decision.status} without an outcome`);
     if (decision.outcome && !people.has(decision.outcome.by)) problems.push(`${decision.code}: decided by someone who is not a person`);
+    if (!decided && decision.outcome) problems.push(`${decision.code}: ${decision.status} but has an outcome`);
+    const approvedIt = decision.status === "approved" || decision.status === "modified";
+    if (approvedIt && decision.blockedBy) problems.push(`${decision.code}: approved while blocked (${decision.blockedBy})`);
+    if (approvedIt && decision.kind === "approval" && decision.artifactId && !decision.outcome?.boundTo) problems.push(`${decision.code}: approved without binding to an artifact version`);
+    if (decision.taskId && !tasks.has(decision.taskId)) problems.push(`${decision.code}: unknown task ${decision.taskId}`);
+    if (decision.artifactId && !world.artifacts.some((a) => a.id === decision.artifactId)) problems.push(`${decision.code}: unknown artifact ${decision.artifactId}`);
   }
 
   for (const risk of world.risks) if (!projects.has(risk.projectId)) problems.push(`${risk.code}: unknown project`);

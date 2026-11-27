@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ArrowRight, Bot, FileText, GitBranch, Hand, Lightbulb, ShieldCheck, Workflow } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
-import { NAV_ITEMS } from "@/app/navigation";
+import { NAV_ITEMS, phasePath } from "@/app/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { gateState, LifecycleRail, portfolioPhase } from "@/components/lifecycle/LifecycleRail";
 import { PhaseContent, PreviewView } from "@/components/phases/PhaseViews";
@@ -19,12 +19,6 @@ import { ROLE_LABELS } from "@/store/actions";
 import { agentType, byId, currentPhase, latestVersion, projectHealth, riskScore } from "@/store/selectors";
 import { useDemo } from "@/store/useDemo";
 import type { Project, World } from "@/types";
-
-/** The phase workspace for a phase (Phase 4 shares Commercial Operations with Phase 5; 6 and 13 have none yet). */
-export function phasePath(phase: number): string {
-  if (phase === 4) return "/business/commercial";
-  return NAV_ITEMS.find((i) => i.phase === phase)?.path ?? "/lifecycle";
-}
 
 export function Lifecycle() {
   const world = useDemo((s) => s.world);

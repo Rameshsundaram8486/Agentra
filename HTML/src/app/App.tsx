@@ -20,6 +20,10 @@ const Pipeline = named(() => import("@/pages/Projects"), "Pipeline");
 const DeliveryBoard = named(() => import("@/pages/Projects"), "DeliveryBoard");
 const Milestones = named(() => import("@/pages/Projects"), "Milestones");
 const ProjectWorkspace = named(() => import("@/pages/ProjectWorkspace"), "ProjectWorkspace");
+const DecisionCenter = named(() => import("@/pages/Decisions"), "DecisionCenter");
+const ApprovalInbox = named(() => import("@/pages/Decisions"), "ApprovalInbox");
+const Recommendations = named(() => import("@/pages/Decisions"), "Recommendations");
+const Escalations = named(() => import("@/pages/Decisions"), "Escalations");
 const lifecycle = (name: "Lifecycle" | "RequirementsWorkspace" | "ArchitectureWorkspace" | "DevelopmentWorkspace" | "QaWorkspace" | "UatWorkspace" | "ReleasesWorkspace" | "SalesWorkspace" | "DiscoveryWorkspace" | "ProposalsWorkspace" | "CommercialWorkspace") =>
   named(() => import("@/pages/Lifecycle"), name);
 
@@ -45,6 +49,10 @@ const PAGES: Record<string, ComponentType | LazyExoticComponent<ComponentType>> 
   discovery: lifecycle("DiscoveryWorkspace"),
   proposals: lifecycle("ProposalsWorkspace"),
   commercial: lifecycle("CommercialWorkspace"),
+  decisions: DecisionCenter,
+  approvals: ApprovalInbox,
+  recommendations: Recommendations,
+  escalations: Escalations,
 };
 
 function Loading() {

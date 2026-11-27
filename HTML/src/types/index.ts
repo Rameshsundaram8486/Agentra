@@ -178,7 +178,7 @@ export interface Execution {
 
 export type DecisionKind = "approval" | "recommendation" | "escalation" | "question";
 export type DecisionStatus = "pending" | "approved" | "modified" | "rejected" | "deferred" | "clarification_requested";
-export type DecisionAction = "accept" | "choose_option" | "custom" | "reject" | "defer" | "clarify" | "comment";
+export type DecisionAction = "accept" | "choose_option" | "custom" | "reject" | "defer" | "clarify" | "comment" | "reopen";
 
 export interface DecisionOption {
   key: string;
@@ -191,7 +191,7 @@ export interface DecisionOption {
 export interface DecisionEvent {
   at: ISODate;
   actor: string; // person id or agent id
-  action: DecisionAction | "raised";
+  action: DecisionAction | "raised" | "answered";
   summary: string;
 }
 
@@ -203,6 +203,7 @@ export interface DecisionOutcome {
   constraints?: string;
   by: string; // person id
   at: ISODate;
+  boundTo?: { artifactId: string; version: number; sha256: string }; // an approval binds to the exact version approved
 }
 
 export interface Decision {
@@ -223,7 +224,9 @@ export interface Decision {
   rationale: string;
   risks: string[];
   evidence: { label: string; ref: string }[];
-  blockedBy?: string; // why it cannot be approved yet (e.g. tests not passed)
+  blockedBy?: string; // why it cannot be decided yet (e.g. tests not passed)
+  taskId?: string; // approvals: the work item waiting for this decision
+  artifactId?: string; // approvals: the document or change set being approved
   status: DecisionStatus;
   outcome?: DecisionOutcome;
   history: DecisionEvent[];

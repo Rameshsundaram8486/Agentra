@@ -15,7 +15,7 @@ import { HEALTH, PRIORITY, TASK_STATE, TONE_DOT, TONE_SOFT } from "@/components/
 import { Segmented } from "@/components/ui/Tabs";
 import { PHASES, phaseDef } from "@/data/lifecycle";
 import { aed, formatDate } from "@/lib/format";
-import { queues } from "@/store/operations";
+import { gatingDecision, queues } from "@/store/operations";
 import { actorName, byId, completion, currentPhase, nextMilestone, openDecisions, projectHealth } from "@/store/selectors";
 import { useDemo } from "@/store/useDemo";
 import type { Health, Project, Task, TaskState, World } from "@/types";
@@ -181,12 +181,12 @@ export function Pipeline() {
   );
 }
 
-// "Waiting on other work" and "Ready" use the same rule as Live Operations (store/operations.ts queues).
+// The waiting, ready and people columns use the same rules as Live Operations (store/operations.ts queues).
 const BOARD_COLUMNS: { id: string; title: string; states: TaskState[] }[] = [
   { id: "todo", title: "Waiting on other work", states: [] },
   { id: "ready", title: "Ready to start", states: [] },
-  { id: "doing", title: "In progress", states: ["in_progress"] },
-  { id: "people", title: "Waiting for people", states: ["waiting_for_review", "waiting_for_input", "changes_requested"] },
+  { id: "doing", title: "In progress", states: ["in_progress", "changes_requested"] },
+  { id: "people", title: "Waiting for people", states: [] },
   { id: "stuck", title: "Blocked or failed", states: ["blocked", "failed"] },
   { id: "done", title: "Done", states: ["completed"] },
 ];
@@ -197,7 +197,7 @@ export function DeliveryBoard() {
   const tasks = world.tasks.filter((t) => t.state !== "cancelled" && (project === "all" || t.projectId === project));
   const q = queues(world);
   const inColumn = (id: string, t: Task) =>
-    id === "todo" ? q.waitingOnWork.includes(t) : id === "ready" ? q.ready.includes(t) : BOARD_COLUMNS.find((c) => c.id === id)!.states.includes(t.state);
+    id === "todo" ? q.waitingOnWork.includes(t) : id === "ready" ? q.ready.includes(t) : id === "people" ? q.waitingOnPeople.includes(t) : BOARD_COLUMNS.find((c) => c.id === id)!.states.includes(t.state);
   return (
     <div className="space-y-5">
       <PageHeader title="Project Delivery Board" crumbs={[{ label: "Project operations" }]} description="Work items across projects by workflow state. States change only through the workflow engine."
@@ -212,7 +212,8 @@ export function DeliveryBoard() {
               <span className="truncate">{byId(world.projects, t.projectId)?.code} · Phase {t.phase}</span>
               {t.agentId && <span className="flex items-center gap-1"><Avatar name={actorName(world, t.agentId)} agent size="sm" /></span>}
             </div>
-            {BOARD_COLUMNS.find((c) => c.id === "people")!.states.includes(t.state) && <StatusPill size="sm" className="mt-1.5" meta={TASK_STATE[t.state]} />}
+            {(t.state === "waiting_for_review" || t.state === "waiting_for_input" || t.state === "changes_requested") && <StatusPill size="sm" className="mt-1.5" meta={TASK_STATE[t.state]} />}
+            {t.state === "not_started" && gatingDecision(world, t) && <StatusPill size="sm" className="mt-1.5" meta={{ ...TASK_STATE.waiting_for_review, label: `Waiting for ${gatingDecision(world, t)!.code}` }} />}
           </Link>
         )}
         columns={BOARD_COLUMNS.map((c) => ({ id: c.id, title: c.title, items: tasks.filter((t) => inColumn(c.id, t)) }))}

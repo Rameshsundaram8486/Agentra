@@ -21,7 +21,7 @@ describe("Live Operations", () => {
     go("#/operations");
     const figures = await screen.findByRole("region", { name: "Operational figures" }, { timeout: 5000 });
     expect(within(figures).getByText("Runs in flight").parentElement?.parentElement).toHaveTextContent("5");
-    expect(within(figures).getByText("Waiting on people").parentElement?.parentElement).toHaveTextContent("4");
+    expect(within(figures).getByText("Waiting on people").parentElement?.parentElement).toHaveTextContent("5"); // 4 reviews or answers, and CR-002 waiting for DEC-003
     expect(screen.getByRole("figure", { name: /Delivery pipeline/ })).toBeInTheDocument();
   });
 
