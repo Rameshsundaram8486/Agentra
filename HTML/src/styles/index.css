@@ -22,6 +22,8 @@
   --primary: #3b82f6;
   --primary-strong: #60a5fa;
   --primary-fg: #ffffff;
+  --primary-solid: #2563eb; /* filled buttons: white text at 5.2:1 */
+  --primary-solid-hover: #1d4ed8;
   --cyan: #22d3ee;
   --violet: #a78bfa;
   --success: #34d399;
@@ -54,10 +56,12 @@
   --primary: #2563eb;
   --primary-strong: #1d4ed8;
   --primary-fg: #ffffff;
+  --primary-solid: #2563eb;
+  --primary-solid-hover: #1d4ed8;
   --cyan: #0e7490;
   --violet: #6d28d9;
   --success: #047857;
-  --warning: #b45309;
+  --warning: #9a4507; /* 5.4:1 on --warning-soft */
   --danger: #b91c1c;
   --neutral: #64748b;
   --primary-soft: rgb(37 99 235 / 0.1);
@@ -86,6 +90,8 @@
   --color-primary: var(--primary);
   --color-primary-strong: var(--primary-strong);
   --color-primary-fg: var(--primary-fg);
+  --color-primary-solid: var(--primary-solid);
+  --color-primary-solid-hover: var(--primary-solid-hover);
   --color-cyan: var(--cyan);
   --color-violet: var(--violet);
   --color-success: var(--success);
@@ -201,4 +207,9 @@ body {
   [data-print-hide] {
     display: none !important;
   }
+}
+
+/* React Flow's attribution link, readable in both themes. */
+.react-flow__attribution a {
+  color: var(--fg-muted);
 }

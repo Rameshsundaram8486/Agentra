@@ -216,6 +216,15 @@ const DECISION_EFFECTS: Record<string, (world: World, decision: Decision) => voi
     if (dev.taskId === "t-s4") Object.assign(dev, { status: "idle", taskId: undefined, since: world.now });
     logActivity(world, "success", "Agentra merged change set WI-004 v2 into main; WI-004 completed", { projectId: "p-spo", agentId: "a-dev2" });
   },
+  "d-wi004-v3": (world) => {
+    const task = byId(world.tasks, "t-s4")!;
+    Object.assign(task, { state: "completed", completedAt: world.now });
+    const doc = byId(world.artifacts, "doc-s-cs4")!;
+    doc.versions[doc.versions.length - 1]!.status = "approved";
+    const dev = byId(world.agents, "a-dev2")!;
+    if (dev.taskId === "t-s4") Object.assign(dev, { status: "idle", taskId: undefined, since: world.now });
+    logActivity(world, "success", "Agentra merged change set WI-004 v3 into main; WI-004 completed", { projectId: "p-spo", agentId: "a-dev2" });
+  },
   "d-wi005": (world) => {
     const task = byId(world.tasks, "t-s5")!;
     Object.assign(task, { state: "completed", completedAt: world.now });

@@ -38,10 +38,35 @@ describe("the simulation", () => {
       }
       expect(invariantProblems(world), `after tick ${world.sim.elapsed}`).toEqual([]);
     }
-    expect(scenarioProgress(world).waiting).toBe(0); // every reaction fired
+    expect(scenarioProgress(world).waiting).toBe(REACTIONS.filter((r) => r.alternative).length); // every reaction fired except those after a rejection
     expect(world.decisions.filter((d) => d.status === "pending")).toEqual([]);
-    expect(byId(world.tasks, "t-s6")!.state).toBe("ready"); // the pilot migration can start
+    expect(byId(world.tasks, "t-s6")!.state).toBe("completed"); // the pilot migration ran
+    expect(byId(world.projects, "p-spo")!.milestones.find((m) => m.title === "Pilot migration complete")!.done).toBe(true);
+    expect(byId(world.tasks, "t-p6")!.state).toBe("completed"); // CR-002 applied
+    expect(byId(world.tasks, "t-u6")!.state).toBe("completed"); // go-live checklist (Preview)
     expect(byId(world.risks, "r3")!.status).toBe("closed"); // DEF-014 fixed
+  });
+
+  it("revises a change set that was sent back, and the new version needs a new approval", () => {
+    let world = run(createSeedWorld(), 9); // WI-004 v2 has passed its sandbox run
+    world = decide(world, { decisionId: "d-wi004", action: "reject", comment: "Add a test for 1 million items", personId: "u-priya", role: "reviewer" });
+    expect(byId(world.tasks, "t-s4")!.state).toBe("changes_requested");
+    world = run(world, 10);
+    const v3 = byId(world.decisions, "d-wi004-v3")!;
+    expect(v3).toMatchObject({ code: "DEC-015", status: "pending" });
+    expect(byId(world.artifacts, "doc-s-cs4")!.versions.at(-1)!.no).toBe(3);
+    expect(v3.blockedBy).toBeDefined(); // waits for its own sandbox run
+    world = run(world, 5);
+    expect(byId(world.decisions, "d-wi004-v3")!.blockedBy).toBeUndefined();
+    world = decide(world, { decisionId: "d-wi004-v3", action: "accept", personId: "u-priya", role: "reviewer" });
+    expect(byId(world.decisions, "d-wi004-v3")!.outcome!.boundTo!.version).toBe(3);
+    expect(byId(world.tasks, "t-s4")!.state).toBe("completed");
+    expect(invariantProblems(world)).toEqual([]);
+  });
+
+  it("keeps the Project Owner Agent scanning after the script has run out", () => {
+    const world = run(createSeedWorld(), 140, false);
+    expect(world.activity.some((e) => e.text.startsWith("Project Owner Agent scan:"))).toBe(true);
   });
 
   it("is deterministic", () => {

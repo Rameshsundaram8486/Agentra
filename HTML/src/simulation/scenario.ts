@@ -11,6 +11,7 @@ export interface ScenarioEvent {
   after: number; // ticks after the previous scripted event
   when?: (world: World) => boolean;
   apply: (world: World) => void;
+  alternative?: boolean; // fires only on a path people may not take (e.g. after a rejection)
 }
 
 /* Helpers ------------------------------------------------------------------------------------------- */
@@ -64,6 +65,14 @@ function free(world: World, agentId: string): boolean {
 function decided(world: World, id: string): boolean {
   const decision = byId(world.decisions, id);
   return decision?.status === "approved" || decision?.status === "modified";
+}
+
+function ticksSince(world: World, iso: string): number {
+  return secondsBetween(iso, world.now) / TICK_SECONDS;
+}
+
+function addDays(iso: string, days: number): string {
+  return new Date(Date.parse(iso) + days * 86_400_000).toISOString();
 }
 
 function unblock(world: World, id: string, evidence: string, ref: string): void {
@@ -243,11 +252,98 @@ export const REACTIONS: ScenarioEvent[] = [
     },
   },
   {
-    id: "pilot-ready", after: 1, when: (w) => decided(w, "d-wi004") && decided(w, "d-wi005"),
+    // A change set sent back is revised: the developer answers the review and submits the next version.
+    id: "wi004-revise-start", after: 1, alternative: true, when: (w) => byId(w.decisions, "d-wi004")?.status === "rejected" && free(w, "a-dev2"),
+    apply: (w) => {
+      const comment = byId(w.decisions, "d-wi004")!.outcome?.comment ?? "the review comments";
+      start(w, { id: "x-305", agentId: "a-dev2", projectId: "p-spo", taskId: "t-s4", title: "Revise WI-004 after review", input: `Change set WI-004 v2, review: ${comment}` });
+      logActivity(w, "info", "Developer Agent 2 is revising WI-004 to answer the review comments", { projectId: "p-spo", agentId: "a-dev2" });
+    },
+  },
+  {
+    id: "wi004-revise-done", after: 1, alternative: true, when: (w) => runningFor(w, "x-305", 6),
+    apply: (w) => {
+      finish(w, "x-305", "succeeded", "Change set WI-004 v3 answers the review; sandbox run queued", 9_800);
+      setTask(w, "t-s4", { state: "waiting_for_review" });
+      setAgent(w, "a-dev2", "waiting_approval", "t-s4", "p-spo");
+      addVersion(w, "doc-s-cs4", "a-dev2", "Answers the review comments on v2");
+      addDecision(w, {
+        id: "d-wi004-v3", taskId: "t-s4", artifactId: "doc-s-cs4", code: "DEC-015", projectId: "p-spo", phase: 9, kind: "approval", priority: "high", title: "Approve change set WI-004 v3 (large-list handler)",
+        question: "Approve the revised change set? It must pass its sandbox build and tests first.", originAgentId: "a-dev2", allowedRoles: ["reviewer"], deadline: addDays(w.now, 1),
+        options: [{ key: "approve", title: "Approve and merge", description: "Agentra merges it into main and completes WI-004.", pros: [], cons: [] }, { key: "changes", title: "Request changes", description: "Send it back with comments.", pros: [], cons: [] }],
+        recommended: "approve", rationale: "v3 answers every comment on v2; the earlier approval request does not carry over to a new version.", risks: ["Pilot migration (WI-006) waits for this and WI-005"],
+        evidence: [{ label: "Change set WI-004 v3", ref: "CS-WI-004-v3" }], blockedBy: "Its sandbox build and test run has not finished yet",
+      });
+      logActivity(w, "info", "Developer Agent 2 submitted WI-004 v3; a new version needs a new approval", { projectId: "p-spo", agentId: "a-dev2" });
+    },
+  },
+  {
+    id: "wi004-v3-tests-pass", after: 1, alternative: true, when: (w) => byId(w.decisions, "d-wi004-v3") !== undefined && ticksSince(w, byId(w.decisions, "d-wi004-v3")!.createdAt) >= 4,
+    apply: (w) => {
+      unblock(w, "d-wi004-v3", "Sandbox build and tests passed: 51 of 51 tests (simulated sandbox VM)", "SBX-RUN-322");
+      notify(w, "success", "WI-004 v3 is ready for approval", "Its sandbox build and tests passed.", "/decisions?id=d-wi004-v3");
+    },
+  },
+  {
+    id: "pilot-ready", after: 1, when: (w) => (decided(w, "d-wi004") || decided(w, "d-wi004-v3")) && decided(w, "d-wi005"),
     apply: (w) => {
       setTask(w, "t-s6", { state: "ready" });
       byId(w.projects, "p-spo")!.phases[8]!.progress = 72;
       logActivity(w, "info", "WI-004 and WI-005 are merged: the pilot migration (WI-006) can start", { projectId: "p-spo" });
+    },
+  },
+  {
+    id: "pilot-start", after: 1, when: (w) => w.sim.done.includes("pilot-ready") && free(w, "a-dev1") && byId(w.tasks, "t-s6")!.state === "ready",
+    apply: (w) => {
+      start(w, { id: "x-306", agentId: "a-dev1", projectId: "p-spo", taskId: "t-s6", title: "Pilot migration: 3 site collections", input: "Batch plan WI-003: finance, HR and projects sites (3 of 42)", handoffTo: "qa_tester" });
+      logActivity(w, "info", "Developer Agent started the pilot migration of 3 site collections", { projectId: "p-spo", agentId: "a-dev1" });
+    },
+  },
+  {
+    id: "pilot-done", after: 1, when: (w) => runningFor(w, "x-306", 8),
+    apply: (w) => {
+      finish(w, "x-306", "succeeded", "41,200 items in 3 site collections migrated; 0 errors; permissions verified", 11_400);
+      setTask(w, "t-s6", { state: "completed" });
+      setAgent(w, "a-dev1", "idle");
+      const milestone = byId(w.projects, "p-spo")!.milestones.find((m) => m.title === "Pilot migration complete");
+      if (milestone) milestone.done = true;
+      byId(w.projects, "p-spo")!.phases[8]!.progress = 80;
+      logActivity(w, "success", "Pilot migration complete: 41,200 items, 0 errors; milestone met", { projectId: "p-spo", agentId: "a-dev1" });
+      notify(w, "success", "Pilot migration complete", "SharePoint Online Migration: 3 site collections, 0 errors.", "/projects/p-spo");
+    },
+  },
+  {
+    id: "cr002-apply", after: 1, when: (w) => decided(w, "d-cr002") && free(w, "a-sa"),
+    apply: (w) => {
+      start(w, { id: "x-307", agentId: "a-sa", projectId: "p-power", taskId: "t-p6", title: "Apply CR-002: scheduled referral reminders", input: "Design v2, approved change request CR-002" });
+      logActivity(w, "info", "Solution Architect Agent is applying the approved change CR-002 to the design", { projectId: "p-power", agentId: "a-sa" });
+    },
+  },
+  {
+    id: "cr002-done", after: 1, when: (w) => runningFor(w, "x-307", 6),
+    apply: (w) => {
+      finish(w, "x-307", "succeeded", "Design v3: API-001 replaced by a scheduled flow at 08:00 on working days", 8_900);
+      setTask(w, "t-p6", { state: "completed" });
+      if (byId(w.tasks, "t-p2")!.state === "waiting_for_review") setAgent(w, "a-sa", "waiting_approval", "t-p2");
+      else setAgent(w, "a-sa", "idle");
+      addVersion(w, "doc-p-sad", "a-sa", "v3: CR-002 scheduled reminders");
+      logActivity(w, "info", "Design v3 with CR-002 is drafted; it needs security and feasibility review again", { projectId: "p-power", agentId: "a-sa" });
+    },
+  },
+  {
+    id: "golive-start", after: 1, when: (w) => decided(w, "d-uat-signoff") && free(w, "a-rel"),
+    apply: (w) => {
+      start(w, { id: "x-308", agentId: "a-rel", projectId: "p-spse", taskId: "t-u6", title: "Go-live readiness checklist (Preview)", input: "UAT sign-off record, release plan, rollback steps" });
+      logActivity(w, "info", "Release & Deployment Agent started the go-live readiness checklist (Preview, outside the MVP)", { projectId: "p-spse", agentId: "a-rel" });
+    },
+  },
+  {
+    id: "golive-done", after: 1, when: (w) => runningFor(w, "x-308", 6),
+    apply: (w) => {
+      finish(w, "x-308", "succeeded", "Checklist ready: 14 of 14 items; the production change needs a person to approve it");
+      setTask(w, "t-u6", { state: "completed" });
+      setAgent(w, "a-rel", "idle");
+      logActivity(w, "success", "Go-live checklist ready; the production upgrade waits for a person to approve it (Preview)", { projectId: "p-spse", agentId: "a-rel" });
     },
   },
 ];

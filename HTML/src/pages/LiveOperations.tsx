@@ -16,7 +16,7 @@ import { AGENT_STATUS, EXECUTION_STATUS, PRIORITY, TASK_STATE } from "@/componen
 import { Segmented } from "@/components/ui/Tabs";
 import { duration, formatDateTime, relative } from "@/lib/format";
 import { ROLE_LABELS } from "@/store/actions";
-import { bottlenecks, currentRun, decisionsFor, executionSeconds, gateDecisions, IN_FLIGHT, queues } from "@/store/operations";
+import { bottlenecks, currentRun, decisionsFor, executionSeconds, gateDecisions, gatingDecision, IN_FLIGHT, queues } from "@/store/operations";
 import { agentType, byId } from "@/store/selectors";
 import { briefing } from "@/store/briefing";
 import { useDemo } from "@/store/useDemo";
@@ -174,7 +174,7 @@ export function LiveOperations() {
                   const decisions = decisionsFor(world, t);
                   return (
                     <li key={t.id} className="px-4 py-2.5">
-                      <div className="flex items-center justify-between gap-2"><span className="text-[13px] font-medium">{t.key} {t.title}</span><StatusPill size="sm" meta={TASK_STATE[t.state]} /></div>
+                      <div className="flex items-center justify-between gap-2"><span className="text-[13px] font-medium">{t.key} {t.title}</span><StatusPill size="sm" meta={t.state === "not_started" && gatingDecision(world, t) ? { ...TASK_STATE.waiting_for_review, label: `Waiting for ${gatingDecision(world, t)!.code}` } : TASK_STATE[t.state]} /></div>
                       <div className="text-2xs text-fg-subtle">{byId(world.projects, t.projectId)?.name}</div>
                       <div className="mt-1 flex flex-wrap gap-1">{decisions.map((d) => <Link key={d.id} to={`/decisions?id=${d.id}`}><Tag tone="violet">{d.code}</Tag></Link>)}</div>
                     </li>

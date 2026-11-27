@@ -7,6 +7,7 @@
 import type { World } from "@/types";
 import { addSeconds, secondsBetween, TICK_SECONDS } from "@/data/time";
 import { answerClarification, logActivity, mutate } from "@/store/actions";
+import { briefing } from "@/store/briefing";
 import { agentType, byId } from "@/store/selectors";
 import { REACTIONS, TIMELINE, type ScenarioEvent } from "./scenario";
 
@@ -18,6 +19,15 @@ export interface Script {
 export const SCRIPT: Script = { timeline: TIMELINE, reactions: REACTIONS };
 
 const LOG_EVERY = 3;
+
+/** Once the script has run out, the Project Owner Agent keeps scanning, so a live demo never goes silent. */
+const SCAN_EVERY = 45;
+
+function ownerScan(world: World, script: Script): void {
+  if (world.sim.cursor < script.timeline.length || world.sim.elapsed % SCAN_EVERY !== 0) return;
+  const brief = briefing(world);
+  logActivity(world, brief.status === "critical" ? "warning" : "info", `Project Owner Agent scan: ${brief.headline} Health score ${brief.score}.`, { agentId: "a-po", link: "/owner" });
+}
 
 const PROGRESS_LINES: Record<string, string[]> = {
   developer: ["Reading the affected modules", "Writing the change and its unit tests", "Running the change set checks", "Preparing the change summary"],
@@ -98,6 +108,7 @@ export function advance(world: World, ticks = 1, script: Script = SCRIPT): World
         draft.sim.lastEventAt = draft.sim.elapsed;
         if (!event.when || event.when(draft)) fire(draft, event);
       }
+      ownerScan(draft, script);
     }
   });
 }

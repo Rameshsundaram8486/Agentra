@@ -65,7 +65,7 @@ export function ProjectWorkspace() {
         <Field label="Current phase">{current.phase}. {phaseDef(current.phase).name}{!phaseDef(current.phase).mvp && <Tag className="ml-1">Preview</Tag>}</Field>
         <Field label="Completion"><div className="flex items-center gap-2"><Progress value={completion(project)} label="Completion" /><span className="tabular">{completion(project)}%</span></div></Field>
         <Field label="Target completion">{formatDate(project.targetDate, true)}<span className="block text-2xs text-fg-subtle">started {formatDate(project.startDate, true)}</span></Field>
-        <Field label="Budget used">{Math.round((project.spentAed / project.budgetAed) * 100)}%<span className="block text-2xs text-fg-subtle">{aed(project.spentAed)} of {aed(project.budgetAed)} (sample)</span></Field>
+        <Field label="Budget used">{Math.round((project.spentAed / project.budgetAed) * 100)}%<span className="block text-2xs text-fg-subtle">{aed(project.spentAed)} of {aed(project.budgetAed)}</span></Field>
       </section>
       {health.health !== "on_track" && health.health !== "completed" && (
         <p className={cn("rounded-lg border px-3 py-2 text-[13px]", health.health === "critical" ? "border-danger/30 bg-danger-soft text-danger" : "border-warning/30 bg-warning-soft text-warning")}>

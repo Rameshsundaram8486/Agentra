@@ -2,10 +2,11 @@
    notifications, theme and the role switcher. Everything that is simulated says so. */
 import { useState } from "react";
 import {
-  Bell, Building, CheckCheck, ChevronDown, Command, Inbox, Menu as MenuIcon, Moon, Pause, Play, RotateCcw, Search, Sun, UserRound,
+  Bell, Building, CheckCheck, ChevronDown, Command, Inbox, Menu as MenuIcon, Moon, Pause, Play, Presentation, RotateCcw, Search, Sun, UserRound,
 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Avatar } from "@/components/ui/Avatar";
+import { GUIDE_STEPS } from "@/data/presenterGuide";
 import { CountBadge, Dot, Tag } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/components/ui/cn";
@@ -20,7 +21,7 @@ import { actorName, byId, isOpenDecision, unreadNotifications } from "@/store/se
 import { ROLE_PEOPLE, useDemo } from "@/store/useDemo";
 import { useUi } from "@/store/useUi";
 import { scenarioProgress } from "@/simulation/engine";
-import type { Role } from "@/types";
+import type { Role, World } from "@/types";
 
 const SEVERITY_TONE: Record<string, Tone> = { info: "primary", success: "success", warning: "warning", critical: "danger" };
 const MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent);
@@ -31,10 +32,11 @@ function SearchButton() {
     <button
       type="button"
       onClick={() => setPalette(true)}
-      className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-line bg-surface px-3 text-[13px] text-fg-subtle transition-colors hover:border-line-strong md:max-w-md"
+      aria-label="Search projects, agents and decisions"
+      className="flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-lg border border-line bg-surface text-[13px] text-fg-subtle transition-colors hover:border-line-strong sm:w-auto sm:min-w-0 sm:flex-1 sm:justify-start sm:px-3 md:max-w-md"
     >
       <Search className="size-4 shrink-0" aria-hidden />
-      <span className="truncate">Search projects, agents, decisions</span>
+      <span className="hidden truncate sm:inline">Search projects, agents, decisions</span>
       <kbd className="ml-auto hidden items-center gap-0.5 rounded border border-line px-1.5 text-2xs text-fg-subtle sm:inline-flex">
         {MAC ? <Command className="size-3" aria-label="Command" /> : "Ctrl "}K
       </kbd>
@@ -62,6 +64,13 @@ function Workspace() {
   );
 }
 
+function integrationSummary(world: World): string {
+  const live = world.integrations.filter((i) => i.status === "connected" || i.status === "warning").length;
+  const attention = world.integrations.filter((i) => i.status === "warning").length;
+  const planned = world.integrations.filter((i) => i.status === "planned").length;
+  return `${live} connected${attention ? ` (${attention} needs attention)` : ""}, ${planned} planned`;
+}
+
 function SystemStatus() {
   const world = useDemo((s) => s.world);
   const working = world.agents.filter((a) => a.status === "working").length;
@@ -70,7 +79,7 @@ function SystemStatus() {
     ["Agent workers", `${working} of ${world.agents.length} agents working`, "success"],
     ["Model gateway", "Claude API, claude-opus-5-5", "success"],
     ["Sandbox VMs", "Simulated in this demo", "warning"],
-    ["Integrations", "6 connected, 2 not configured", "success"],
+    ["Integrations", integrationSummary(world), world.integrations.some((i) => i.status === "warning") ? "warning" : "success"],
   ];
   return (
     <Popover
@@ -117,7 +126,7 @@ function DemoControls() {
           className={cn("inline-flex h-9 items-center gap-2 rounded-lg border px-2.5 text-xs font-semibold tracking-wide", running ? "border-success/40 bg-success-soft text-success" : "border-line text-fg-muted hover:bg-surface-2")}
         >
           <Dot tone={running ? "success" : "neutral"} pulse={running} />
-          {running ? "LIVE" : "PAUSED"}
+          <span className="hidden sm:inline">{running ? "LIVE" : "PAUSED"}</span>
         </button>
       }
     >
@@ -139,6 +148,13 @@ function DemoControls() {
           <div className="flex justify-between"><dt className="text-fg-subtle">Script</dt><dd className="tabular">{progress.fired} of {progress.total} events</dd></div>
           <div className="flex justify-between"><dt className="text-fg-subtle">Waiting for people or work</dt><dd className="tabular">{progress.waiting}</dd></div>
         </dl>
+        <PopoverClose asChild>
+          <Link to="/guide" className="flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-[13px] hover:bg-surface-2">
+            <Presentation className="size-4 text-fg-subtle" aria-hidden />
+            <span className="flex-1">Presenter guide</span>
+            <span className="text-2xs text-fg-subtle">{GUIDE_STEPS.length} steps, {GUIDE_STEPS.reduce((s, step) => s + step.minutes, 0)} min</span>
+          </Link>
+        </PopoverClose>
         <div className="border-t border-line pt-3">
           {confirmReset ? (
             <div className="space-y-2">
@@ -244,7 +260,7 @@ function Profile() {
     <Menu
       label="Acting as"
       trigger={
-        <button type="button" className="flex h-9 items-center gap-2 rounded-lg pr-1.5 pl-1 hover:bg-surface-2">
+        <button type="button" aria-label={`Acting as ${person.name}, ${ROLE_LABELS[role].toLowerCase()}. Switch role`} className="flex h-9 items-center gap-2 rounded-lg pr-1.5 pl-1 hover:bg-surface-2">
           <Avatar name={person.name} size="sm" />
           <span className="hidden text-left leading-tight lg:block">
             <span className="block text-[13px] font-medium">{person.name}</span>
@@ -276,7 +292,7 @@ export function TopBar() {
       <SearchButton />
       <Workspace />
       <div className="ml-auto flex items-center gap-1">
-        <Tag tone="warning" className="hidden sm:inline-flex" title="Everything shown is simulated; nothing is connected to the Agentra backend">Demo · simulated</Tag>
+        <span className="hidden sm:inline-flex"><Tag tone="warning" title="Everything shown is simulated; nothing is connected to the Agentra backend">Demo · simulated</Tag></span>
         <SystemStatus />
         <DemoControls />
         <WaitingForYou />

@@ -15,6 +15,7 @@ const AgentControlCenter = named(() => import("@/pages/Agents"), "AgentControlCe
 const AgentDirectory = named(() => import("@/pages/Agents"), "AgentDirectory");
 const ExecutionHistory = named(() => import("@/pages/Agents"), "ExecutionHistory");
 const Gallery = named(() => import("@/pages/Gallery"), "Gallery");
+const Guide = named(() => import("@/pages/Guide"), "Guide");
 const Projects = named(() => import("@/pages/Projects"), "Projects");
 const Pipeline = named(() => import("@/pages/Projects"), "Pipeline");
 const DeliveryBoard = named(() => import("@/pages/Projects"), "DeliveryBoard");
@@ -107,6 +108,7 @@ export function App() {
               })}
               <Route path="/projects/:projectId" element={<Suspense fallback={<Loading />}><ProjectWorkspace /></Suspense>} />
               <Route path="/design-system" element={<Suspense fallback={<Loading />}><Gallery /></Suspense>} />
+              <Route path="/guide" element={<Suspense fallback={<Loading />}><Guide /></Suspense>} />
               <Route path="*" element={<Placeholder />} />
             </Route>
           </Routes>

@@ -7,7 +7,7 @@ import { TopBar } from "./TopBar";
 export function AppShell() {
   return (
     <div className="flex min-h-screen bg-bg">
-      <a href="#main" className="sr-only rounded-lg bg-primary px-3 py-2 text-primary-fg focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70]">
+      <a href="#main" className="sr-only rounded-lg bg-primary-solid px-3 py-2 text-primary-fg focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70]">
         Skip to content
       </a>
       <Sidebar />
